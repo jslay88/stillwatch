@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Stillwatch
+GenericName=OLED burn-in protection
+Comment=Open Stillwatch settings
+Exec=stillwatch-gui settings
+Icon=io.github.jslay88.Stillwatch
+Terminal=false
+Categories=Settings;
+StartupNotify=true

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Stillwatch
+GenericName=OLED burn-in protection
+Comment=Stillwatch tray
+Exec=stillwatch-gui
+Icon=io.github.jslay88.Stillwatch
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::ValueEnum;
 
 use crate::process::Step;
-use crate::{coverage, size};
+use crate::{coverage, packaging, size};
 
 /// One quality gate, as run by `cargo xtask ci` and the CI workflow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -25,19 +25,22 @@ pub enum Gate {
     Machete,
     /// Tests under `cargo llvm-cov nextest` plus coverage thresholds, see [`coverage`].
     Coverage,
+    /// The systemd unit and desktop files, when the checkers are installed.
+    Packaging,
     /// Builds the benchmarks without running them.
     Bench,
 }
 
 impl Gate {
     /// Every gate, in the order `cargo xtask ci` runs them.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Fmt,
         Self::Clippy,
         Self::Size,
         Self::Jscpd,
         Self::Deny,
         Self::Machete,
+        Self::Packaging,
         Self::Coverage,
         Self::Bench,
     ];
@@ -55,6 +58,7 @@ impl Gate {
             Self::Deny => "deny",
             Self::Machete => "machete",
             Self::Coverage => "coverage",
+            Self::Packaging => "packaging",
             Self::Bench => "bench",
         }
     }
@@ -69,6 +73,7 @@ impl Gate {
             Self::Deny => &["cargo-deny"],
             Self::Machete => &["cargo-machete"],
             Self::Coverage => &["cargo-llvm-cov", "cargo-nextest"],
+            Self::Packaging => &["systemd-analyze", "desktop-file-validate"],
         }
     }
 
@@ -92,7 +97,7 @@ impl Gate {
             Self::Deny => Step::new("cargo", ["deny", "--locked", "check"]),
             Self::Machete => Step::new("cargo", ["machete"]),
             Self::Bench => Step::new("cargo", ["bench", "--workspace", "--locked", "--no-run"]),
-            Self::Size | Self::Coverage => return None,
+            Self::Size | Self::Coverage | Self::Packaging => return None,
         };
         Some(step)
     }
@@ -102,6 +107,7 @@ impl Gate {
         match self {
             Self::Size => size::check(root, size::DEFAULT_MAX_LINES),
             Self::Coverage => coverage::run(root),
+            Self::Packaging => packaging::check(root),
             _ => self.command().map_or(Ok(()), |step| step.run(root)),
         }
     }
@@ -139,6 +145,7 @@ mod tests {
     fn in_process_gates_have_no_single_command() {
         assert_eq!(command_line(Gate::Size), None);
         assert_eq!(command_line(Gate::Coverage), None);
+        assert_eq!(command_line(Gate::Packaging), None);
     }
 
     #[test]
@@ -147,7 +154,15 @@ mod tests {
         assert_eq!(
             names,
             [
-                "fmt", "clippy", "size", "jscpd", "deny", "machete", "coverage", "bench"
+                "fmt",
+                "clippy",
+                "size",
+                "jscpd",
+                "deny",
+                "machete",
+                "packaging",
+                "coverage",
+                "bench",
             ]
         );
         assert_eq!(Gate::FAST, Gate::ALL[..3]);

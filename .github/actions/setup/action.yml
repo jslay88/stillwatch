@@ -12,8 +12,9 @@ runs:
       run: >-
         pacman -Syu --noconfirm --needed
         base-devel git rustup nodejs npm clang pkgconf
-        wayland libxkbcommon systemd-libs dbus pipewire libpipewire mesa
+        wayland libxkbcommon systemd systemd-libs dbus pipewire libpipewire mesa
         vulkan-icd-loader fontconfig freetype2 kwin libkscreen xdg-desktop-portal
+        desktop-file-utils
 
     - name: Install Rust from .tool-versions
       shell: bash
