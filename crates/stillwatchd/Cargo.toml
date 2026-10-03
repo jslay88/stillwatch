@@ -12,9 +12,16 @@ publish.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true
+
+[dev-dependencies]
+stillwatch-core = { workspace = true, features = ["mocks"] }
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true
