@@ -112,19 +112,29 @@ fn input_then_cancel_goes_active() {
 }
 
 #[test]
-fn dismissed_or_prompter_timeout_after_input_goes_active() {
-    for outcome in [PromptOutcome::Dismissed, PromptOutcome::Timeout] {
-        let mut h = prompted_then_input(Duration::ZERO);
-        let commands = h.answer(outcome);
-        assert!(commands.contains(&Command::DismissPrompt), "{outcome:?}");
-        assert!(commands.contains(&changed(State::Prompting, State::Active)));
-        assert_eq!(
-            records(&commands)[0].answer,
-            Some(PromptAnswer::from(outcome))
-        );
-        assert!(h.timers().is_empty());
-        assert_never_blanked(&h);
-    }
+fn dismissed_after_input_goes_active() {
+    let mut h = prompted_then_input(Duration::ZERO);
+    let commands = h.answer(PromptOutcome::Dismissed);
+    assert!(commands.contains(&Command::DismissPrompt));
+    assert!(commands.contains(&changed(State::Prompting, State::Active)));
+    assert_eq!(records(&commands)[0].answer, Some(PromptAnswer::Dismissed));
+    assert!(h.timers().is_empty());
+    assert_never_blanked(&h);
+}
+
+#[test]
+fn prompter_timeout_after_input_still_acts() {
+    // "Blank now" answers Timeout, and clicking it is input too.
+    let mut h = prompted_then_input(Duration::ZERO);
+    let commands = h.answer(PromptOutcome::Timeout);
+    assert!(commands.contains(&Command::CancelTimer(TimerId::PromptAnswerGrace)));
+    assert!(commands.contains(&changed(State::Prompting, State::Acting)));
+    assert_eq!(
+        record_kinds(&commands)[..2],
+        [HistoryKind::PromptAnswered, HistoryKind::Transition]
+    );
+    assert_eq!(records_of(&commands, HistoryKind::Blank).len(), 1);
+    assert!(h.timers().is_empty());
 }
 
 #[test]

@@ -5,8 +5,9 @@
 //! before the prompter reports the click. So the first input arms the answer
 //! grace (`prompt.answer_grace_seconds`); more input doesn't push it back.
 //! From then on the user counts as present: answers work as usual, and the
-//! grace or the countdown running out, a dismissal, or the prompter's
-//! timeout all go to Active, never to the action. Picking "Custom..." also
+//! grace or our countdown running out, or a dismissal, go to Active instead
+//! of the action. A prompter's `Timeout` still acts, because a prompter only
+//! sends it when asked to act now ("Blank now"). Picking "Custom..." also
 //! counts as presence and restarts the grace, so the dialog gets the full
 //! time from the click (still capped by the countdown).
 
@@ -93,7 +94,7 @@ fn answered(ctx: &mut Ctx, outcome: PromptOutcome) -> Option<Transition> {
     match outcome {
         PromptOutcome::Snooze(duration) => ctx.snooze(duration),
         PromptOutcome::Cancel => Some(Transition::to(State::Active)),
-        PromptOutcome::Timeout => Some(ran_out(ctx)),
+        PromptOutcome::Timeout => Some(Transition::to(State::Acting)),
         PromptOutcome::Dismissed => present(ctx).then(|| Transition::to(State::Active)),
         PromptOutcome::CustomRequested => {
             start_grace(ctx);
@@ -107,7 +108,7 @@ fn present(ctx: &Ctx) -> bool {
     ctx.is_armed(TimerId::PromptAnswerGrace)
 }
 
-/// Where a prompt that ran out without an answer goes.
+/// Where the prompt goes when our countdown runs out.
 fn ran_out(ctx: &Ctx) -> Transition {
     if present(ctx) {
         Transition::to(State::Active)

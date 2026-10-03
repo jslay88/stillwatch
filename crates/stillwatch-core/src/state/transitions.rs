@@ -36,9 +36,13 @@ pub const TRANSITIONS: &[TransitionRule] = &[
     rule(
         Prompting,
         Active,
-        "cancel; after input: answer grace over, dismissed, or timeout; or suspend",
+        "cancel; after input: answer grace over, dismissed, or countdown over; or suspend",
     ),
-    rule(Prompting, Acting, "timeout without input"),
+    rule(
+        Prompting,
+        Acting,
+        "countdown over without input, or the prompter's timeout (blank now)",
+    ),
     rule(Acting, Blanked, "action completed"),
     rule(
         Acting,
