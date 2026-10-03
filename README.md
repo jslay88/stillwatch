@@ -16,7 +16,7 @@ stillwatch reload
 stillwatch history [--since <DURATION>] [--json]
 stillwatch probe [--interval <DURATION>]
 stillwatch idle-test [--timeout <DURATION>]
-stillwatch config init [--force] [--path <PATH>]
+stillwatch config init [--force] [PATH]
 stillwatch config check [PATH]
 ```
 

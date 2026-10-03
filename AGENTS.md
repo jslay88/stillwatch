@@ -43,6 +43,7 @@ Toolchain comes from asdf via `.tool-versions` (Rust and Node, the latter for `j
 | `cargo xtask install-hooks` | Points `core.hooksPath` at `.githooks/` so the pre-commit hook runs. |
 | `cargo xtask check-size` | 400-line limit per `.rs` file, excluding `#[cfg(test)]` modules. |
 | `cargo xtask coverage` | `cargo llvm-cov` with the thresholds (workspace >= 80%, `stillwatch-core` >= 90%). |
+| `cargo xtask gen-docs` | Regenerates `docs/config.md` from the settings schema. Run it after changing any setting; `--check` only verifies. |
 
 ## Linear workflow
 

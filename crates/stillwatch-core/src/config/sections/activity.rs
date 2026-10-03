@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::limits::{PERCENT, POSITIVE};
 use crate::config::validate::Issues;
 
 /// `[idle]`: how long input must be idle before monitoring starts.
@@ -22,7 +23,7 @@ impl Default for IdleConfig {
 
 impl IdleConfig {
     pub(crate) fn validate(&self, issues: &mut Issues) {
-        issues.at_least("idle.input_idle_minutes", self.input_idle_minutes, 1);
+        issues.range("idle.input_idle_minutes", self.input_idle_minutes, POSITIVE);
     }
 }
 
@@ -86,7 +87,7 @@ impl ActivityConfig {
         issues.range(
             "activity.gamepad_deadzone_percent",
             self.gamepad_deadzone_percent,
-            0..=100,
+            PERCENT,
         );
         issues.entries_not_blank(
             "activity.gamepad_ignore_devices",

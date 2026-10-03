@@ -157,7 +157,7 @@ fn config_init() {
         }
     );
     assert_eq!(
-        command(&["config", "init", "--force", "--path", "/tmp/sw.toml"]),
+        command(&["config", "init", "--force", "/tmp/sw.toml"]),
         Command::Config {
             command: ConfigCommand::Init(ConfigInitArgs {
                 force: true,

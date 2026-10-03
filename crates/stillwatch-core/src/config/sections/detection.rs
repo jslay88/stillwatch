@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::limits::{Bounds, DOWNSCALE_WIDTH, LUMA, PERCENT, PERCENT_NONZERO, POSITIVE};
 use crate::config::validate::Issues;
 
 /// Which screen capture backend to use.
@@ -129,42 +130,47 @@ impl StaleConfig {
     }
 
     pub(crate) fn validate(&self, issues: &mut Issues) {
-        issues.at_least(
+        issues.range(
             "stale.check_interval_seconds",
             self.check_interval_seconds,
-            1,
+            POSITIVE,
         );
-        issues.at_least("stale.persist_checks", self.persist_checks, 1);
-        issues.range("stale.stale_percent", self.stale_percent, 1..=100);
+        issues.range("stale.persist_checks", self.persist_checks, POSITIVE);
+        issues.range("stale.stale_percent", self.stale_percent, PERCENT_NONZERO);
         issues.range(
             "stale.media_stale_percent",
             self.media_stale_percent,
-            0..=100,
+            PERCENT,
         );
         issues.entries_not_blank("stale.media_ignore_players", &self.media_ignore_players);
         issues.range(
             "stale.luma_delta_threshold",
             self.luma_delta_threshold,
-            0..=255,
+            LUMA,
         );
-        issues.range("stale.ignore_dark_below", self.ignore_dark_below, 0..=255);
-        issues.at_least("stale.downscale_width", self.downscale_width, 16);
+        issues.range("stale.ignore_dark_below", self.ignore_dark_below, LUMA);
+        issues.range(
+            "stale.downscale_width",
+            self.downscale_width,
+            DOWNSCALE_WIDTH,
+        );
         self.validate_block_grid(issues);
         issues.entries_not_blank("stale.monitored_outputs", &self.monitored_outputs);
         for (index, region) in self.ignore_regions.iter().enumerate() {
             let key = format!("stale.ignore_regions[{index}]");
             issues.not_blank(&format!("{key}.output"), &region.output);
-            issues.at_least(&format!("{key}.w"), region.w, 1);
-            issues.at_least(&format!("{key}.h"), region.h, 1);
+            issues.range(&format!("{key}.w"), region.w, POSITIVE);
+            issues.range(&format!("{key}.h"), region.h, POSITIVE);
         }
     }
 
     fn validate_block_grid(&self, issues: &mut Issues) {
         // The downscaled height depends on the output's aspect ratio, so the
         // width is the only bound known before capture.
-        let max = self.downscale_width.max(1);
+        let max = self.downscale_width.max(POSITIVE.min);
+        let allowed = Bounds::new(POSITIVE.min, max);
         for (index, (name, value)) in ["cols", "rows"].iter().zip(self.block_grid).enumerate() {
-            if !(1..=max).contains(&value) {
+            if !allowed.contains(value) {
                 issues.push(
                     format!("stale.block_grid[{index}]"),
                     format!("{name} must be between 1 and downscale_width ({max}), got {value}"),
@@ -204,7 +210,7 @@ impl SafetyConfig {
         issues.range(
             "safety.ceiling_stale_percent",
             self.ceiling_stale_percent,
-            1..=100,
+            PERCENT_NONZERO,
         );
         let ceiling_seconds = u64::from(self.ceiling_minutes) * 60;
         let normal_seconds = stale.normal_path_seconds();

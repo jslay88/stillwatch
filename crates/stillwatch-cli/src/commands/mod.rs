@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn unimplemented_commands_say_so() {
-        let cases: [(&[&str], &str); 11] = [
+        let cases: [(&[&str], &str); 9] = [
             (&["status"], "status"),
             (&["snooze", "45m"], "snooze"),
             (&["cancel-snooze"], "cancel-snooze"),
@@ -58,8 +58,6 @@ mod tests {
             (&["history", "--since", "2h"], "history"),
             (&["probe"], "probe"),
             (&["idle-test"], "idle-test"),
-            (&["config", "init"], "config init"),
-            (&["config", "check"], "config check"),
         ];
         for (args, name) in cases {
             let err = dispatch_args(args).unwrap_err();

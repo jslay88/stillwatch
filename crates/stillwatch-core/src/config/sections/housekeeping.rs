@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::limits::POSITIVE;
 use crate::config::validate::Issues;
 
 /// `[panel_care]`: screen-on tracking so the panel's compensation cycle can run.
@@ -34,7 +35,7 @@ impl Default for PanelCareConfig {
 
 impl PanelCareConfig {
     pub(crate) fn validate(&self, issues: &mut Issues) {
-        issues.at_least("panel_care.reminder_hours", self.reminder_hours, 1);
+        issues.range("panel_care.reminder_hours", self.reminder_hours, POSITIVE);
     }
 }
 
@@ -59,7 +60,7 @@ impl Default for HistoryConfig {
 
 impl HistoryConfig {
     pub(crate) fn validate(&self, issues: &mut Issues) {
-        issues.at_least("history.max_entries", self.max_entries, 1);
+        issues.range("history.max_entries", self.max_entries, POSITIVE);
     }
 }
 
