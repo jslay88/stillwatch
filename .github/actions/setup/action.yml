@@ -1,0 +1,38 @@
+name: Set up Stillwatch build
+description: >-
+  System libraries, the Rust toolchain pinned in .tool-versions, the cargo
+  tools behind `cargo xtask` gates, jscpd, and the cargo cache. Expects to run
+  in an archlinux container after checkout.
+
+runs:
+  using: composite
+  steps:
+    - name: Install system packages
+      shell: bash
+      run: >-
+        pacman -Syu --noconfirm --needed
+        base-devel git rustup nodejs npm clang pkgconf
+        wayland libxkbcommon systemd-libs dbus pipewire libpipewire mesa
+        vulkan-icd-loader fontconfig freetype2 kwin xdg-desktop-portal
+
+    - name: Install Rust from .tool-versions
+      shell: bash
+      run: |
+        version="$(awk '$1 == "rust" { print $2 }' .tool-versions)"
+        test -n "$version"
+        rustup toolchain install "$version" --profile minimal -c clippy,rustfmt,llvm-tools-preview
+        rustup default "$version"
+        echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> "$GITHUB_PATH"
+        rustc --version
+
+    - name: Install cargo tools
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-nextest@0.9.146,cargo-llvm-cov@0.9.1,cargo-deny@0.20.2,cargo-machete@0.9.2
+
+    - name: Install jscpd
+      shell: bash
+      run: npm install --global jscpd@5.4.0
+
+    - name: Cache cargo registry and target
+      uses: Swatinem/rust-cache@v2
