@@ -18,6 +18,14 @@ fn reads_and_parses_file() {
 }
 
 #[test]
+fn read_returns_the_text_unparsed() {
+    let (dir, path) = write_config("not = [valid");
+    assert_eq!(read(&path).unwrap(), "not = [valid");
+    let missing = dir.path().join("missing.toml");
+    assert!(matches!(read(&missing), Err(ConfigError::NotFound { .. })));
+}
+
+#[test]
 fn written_defaults_load_back() {
     let (_dir, path) = write_config(&Config::default().to_toml_string().unwrap());
     assert_eq!(load(&path).unwrap().config, Config::default());

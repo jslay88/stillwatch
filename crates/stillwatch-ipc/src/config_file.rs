@@ -30,15 +30,25 @@ pub enum ConfigFileError {
 /// can fall back to defaults, [`ConfigError::Io`] for other read failures, and
 /// otherwise anything [`Config::from_toml_str`] returns.
 pub fn load(path: &Path) -> Result<LoadOutcome, ConfigError> {
-    let input = std::fs::read_to_string(path).map_err(|source| {
+    Config::from_toml_str(&read(path)?)
+}
+
+/// Reads the config file at `path` without parsing it, for callers that
+/// need the exact text they then hand to [`Config::from_toml_str`].
+///
+/// # Errors
+///
+/// Returns [`ConfigError::NotFound`] if the file doesn't exist and
+/// [`ConfigError::Io`] for other read failures.
+pub fn read(path: &Path) -> Result<String, ConfigError> {
+    std::fs::read_to_string(path).map_err(|source| {
         let path = path.to_path_buf();
         if source.kind() == io::ErrorKind::NotFound {
             ConfigError::NotFound { path }
         } else {
             ConfigError::Io { path, source }
         }
-    })?;
-    Config::from_toml_str(&input)
+    })
 }
 
 /// Why [`write`] failed.

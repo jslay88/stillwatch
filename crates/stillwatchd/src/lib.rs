@@ -8,6 +8,7 @@ pub mod activity;
 pub mod args;
 pub mod capture;
 pub mod clock;
+pub mod config_watch;
 mod dbus;
 pub mod gamepad;
 pub mod history;

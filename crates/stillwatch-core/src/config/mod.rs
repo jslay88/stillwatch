@@ -5,6 +5,7 @@
 //! check, in-memory migration, deserialization, and [`Config::validate`].
 //! Reading the file is left to the caller (`stillwatch_ipc::config_file`).
 
+mod changes;
 mod error;
 pub mod limits;
 mod load;
@@ -14,6 +15,7 @@ mod validate;
 
 use serde::{Deserialize, Serialize};
 
+pub use changes::ConfigChanges;
 pub use error::ConfigError;
 pub use limits::Bounds;
 pub use load::LoadOutcome;
