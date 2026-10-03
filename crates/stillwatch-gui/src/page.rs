@@ -1,4 +1,4 @@
-//! Settings-window pages. History and service are still placeholders.
+//! Settings-window pages.
 
 /// A page of the settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -8,9 +8,9 @@ pub enum Page {
     Settings,
     /// Calibration heatmap and ignore-region editor.
     Calibration,
-    /// Decision history (later).
+    /// Decision history.
     History,
-    /// Daemon service controls (later).
+    /// Daemon service controls, tray autostart, and panel care.
     Service,
 }
 
@@ -40,8 +40,8 @@ impl Page {
         match self {
             Self::Settings => "Settings editing is not built yet.",
             Self::Calibration => "The calibration heatmap is on this page.",
-            Self::History => "History is not built yet.",
-            Self::Service => "Service controls are not built yet.",
+            Self::History => "Past decisions, from the daemon or the history file.",
+            Self::Service => "User unit, tray autostart, and panel care.",
         }
     }
 }

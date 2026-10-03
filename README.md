@@ -60,7 +60,7 @@ Logs go to the journal (`journalctl --user -u stillwatch`). systemd sets `JOURNA
 
 There is no D-Bus activation file. A bus activation would start `stillwatchd` on the first name lookup, outside the graphical session (no Wayland, and no journal stream attached to the unit). `stillwatch` already exits 3 when the name has no owner instead of starting a daemon.
 
-The tray does not autostart on install. Copy `io.github.jslay88.Stillwatch.Tray.desktop` from `<prefix>/share/stillwatch/` to `~/.config/autostart/` when you want the tray at login. The settings launcher is the desktop file in `share/applications`.
+The tray does not autostart on install. The Service page writes or removes `~/.config/autostart/io.github.jslay88.Stillwatch.Tray.desktop` (`Exec=stillwatch-gui`). The same file is the template in `<prefix>/share/stillwatch/` if you want to copy it by hand. The settings launcher is the desktop file in `share/applications`.
 
 Icons: `io.github.jslay88.Stillwatch` is the app icon. Status icons `io.github.jslay88.Stillwatch-{down,active,monitoring,prompting,snoozed,acting,blanked,locked,paused}` are the tray states.
 
@@ -190,7 +190,7 @@ stillwatch-gui prompt [--remaining SECS] [--custom]
 
 Everything except `idle-test`, `config`, and `probe --standalone` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
 
-`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. Settings is the schema-driven form. Calibration is the heatmap. History and Service are still placeholders. `stillwatch-gui prompt` is the countdown dialog (presets, a custom duration, Blank now, and Cancel). It answers over D-Bus and exits.
+`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. Settings is the schema-driven form. Calibration is the heatmap. History lists past decisions (from the daemon, or from `history.jsonl` when it is down) with a 1h, 6h, 24h, or all filter, a kind filter, and the detail behind each entry. Service shows whether `stillwatch.service` is running and enabled, starts, stops, and restarts it, and toggles login and tray autostart. When the unit is failed it shows the last 50 journal lines and a button that opens the full log. It also shows panel care: screen-on time, last standby, and overlay uses. `stillwatch-gui prompt` is the countdown dialog (presets, a custom duration, Blank now, and Cancel). It answers over D-Bus and exits.
 
 - **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
 - **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.
@@ -233,7 +233,7 @@ stillwatch history --since 2h
 stillwatch history --json
 ```
 
-`--json` prints one `HistoryEntry` per line. The file holds numbers and state names only. No pixels, no window titles, no track metadata. `history.max_entries` (default 1000) drops the oldest first. The GUI History page reads the same file once that page exists. `stillwatch probe` is not history: probe is live, history is what already happened.
+`--json` prints one `HistoryEntry` per line. The file holds numbers and state names only. No pixels, no window titles, no track metadata. `history.max_entries` (default 1000) drops the oldest first. The GUI History page calls `History(since)` while the daemon is up, and reads this file when it is down. The bus has no history-added signal, so the page polls `History(since)` while it is open. `stillwatch probe` is not history: probe is live, history is what already happened.
 
 ## Panel care
 
@@ -243,7 +243,7 @@ What it does instead is let the panel's own compensation cycle run. Most OLEDs d
 
 `[panel_care]` tracks screen-on time. `min_standby_minutes` in real standby resets the counter. The overlay doesn't. After `reminder_hours` (default 4) it reminds you to turn the display off. `trigger_cmd` runs at blank time when that threshold is due, for a model whose vendor published a tool. [panel-care-trigger.sh](packaging/hooks/panel-care-trigger.sh) is an empty skeleton with the warning in the header. It sends nothing until you replace the marked section.
 
-Screen-on time is stored in `~/.local/state/stillwatch/panel.json`. `stillwatch status` prints the current counters.
+Screen-on time is stored in `~/.local/state/stillwatch/panel.json`. `stillwatch status` prints the current counters. The Service page shows the same three: screen-on time, last standby, and overlay uses. There is no pixel-exercise control.
 
 ## Privacy
 

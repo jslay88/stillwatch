@@ -5,7 +5,9 @@ use iced::widget::{button, column, container, row, text};
 use iced::{Element, Fill};
 
 use crate::calibration;
+use crate::history;
 use crate::page::Page;
+use crate::service;
 use crate::settings;
 use crate::shell::{Message, Shell};
 use crate::tray::status_text;
@@ -22,9 +24,8 @@ pub fn shell(shell: &Shell) -> Element<'_, Message> {
                 .map(Message::Settings),
         ),
         Page::Calibration => content.push(calibration::page(shell)),
-        page => content
-            .push(text(page.label()).size(24))
-            .push(text(page.placeholder())),
+        Page::History => content.push(history::page(shell)),
+        Page::Service => content.push(service::page(shell)),
     };
     if let Some(notice) = &shell.notice {
         content = content.push(text(notice));

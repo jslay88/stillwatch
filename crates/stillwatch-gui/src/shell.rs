@@ -4,12 +4,14 @@
 use std::path::PathBuf;
 
 use stillwatch_core::state::State;
-use stillwatch_ipc::status::StatusPayload;
+use stillwatch_ipc::status::{PanelCareStatus, StatusPayload};
 
 use crate::calibration::{CalMsg, Calibration, ProbeView};
 use crate::edit_msg::SettingsMsg;
+use crate::history::{HistMsg, HistoryLoad, HistoryPage};
 use crate::launch::LaunchMode;
 use crate::page::Page;
+use crate::service::{ServicePage, SvcMsg, UnitOp, UnitView};
 use crate::settings::{Catalog, Editor};
 
 /// Whether a window is closed, open, or open and needing focus.
@@ -118,6 +120,14 @@ pub enum DaemonEvent {
     Capture(Option<String>),
     /// A `ProbeSample`, reduced to block states and percentages.
     Probe(ProbeView),
+    /// `History(since)`, or the ring file when the daemon is down.
+    History(Result<HistoryLoad, String>),
+    /// The user unit, from the systemd manager on this bus.
+    Unit(UnitView),
+    /// Whether the tray autostart desktop file is present.
+    Autostart(bool),
+    /// `Status().panel_care`.
+    Panel(Option<PanelCareStatus>),
 }
 
 /// A method the tray asked the daemon to run.
@@ -145,6 +155,21 @@ pub enum DaemonCall {
     },
     /// `StopProbe()`.
     StopProbe,
+    /// `History(since_seconds)`, or the ring file when the daemon is down.
+    LoadHistory {
+        /// Seconds argument. `0` is the whole ring.
+        since_seconds: u64,
+    },
+    /// Read `stillwatch.service` from the user manager.
+    RefreshUnit,
+    /// Start, stop, restart, enable, or disable the unit.
+    Unit(UnitOp),
+    /// Check the tray autostart file.
+    ReadAutostart,
+    /// Write or remove the tray autostart file.
+    SetAutostart(bool),
+    /// Open the unit journal in a terminal.
+    OpenJournal,
 }
 
 /// A tray menu (or left-click) choice.
@@ -198,6 +223,12 @@ pub enum Message {
     Settings(SettingsMsg),
     /// A calibration-page control.
     Calibration(CalMsg),
+    /// A history-page control or a finished load.
+    History(HistMsg),
+    /// A service-page control or a finished unit query.
+    Service(SvcMsg),
+    /// Poll history or the user unit while that page is showing.
+    PollPage,
 }
 
 /// The settings window, the prompt placeholder, and the daemon link.
@@ -233,6 +264,12 @@ pub struct Shell {
     pub capture_known: bool,
     /// Calibration heatmap and the probe it drives.
     pub calibration: Calibration,
+    /// Screen-on time from the last status.
+    pub panel_care: Option<PanelCareStatus>,
+    /// History filters and the last load.
+    pub history: HistoryPage,
+    /// User unit and tray autostart.
+    pub service: ServicePage,
 }
 
 impl Shell {
@@ -255,6 +292,9 @@ impl Shell {
             capture_backend: None,
             capture_known: false,
             calibration: Calibration::default(),
+            panel_care: None,
+            history: HistoryPage::default(),
+            service: ServicePage::default(),
         }
     }
 

@@ -18,10 +18,20 @@ fn pages_route_and_the_window_opens_without_a_daemon() {
     assert_eq!(shell.link, Link::Down);
     assert_eq!(update(&mut shell, Message::OpenSettings), vec![]);
     assert_eq!(shell.settings, Visibility::Open);
-    assert_eq!(update(&mut shell, Message::Navigate(Page::History)), vec![]);
+    assert_eq!(
+        update(&mut shell, Message::Navigate(Page::History)),
+        vec![DaemonCall::LoadHistory {
+            since_seconds: crate::history::TimeRange::Day.since_seconds(),
+        }]
+    );
     assert_eq!(shell.page, Page::History);
     assert_eq!(shell.settings, Visibility::Open);
-    assert_eq!(update(&mut shell, Message::OpenSettings), vec![]);
+    assert_eq!(
+        update(&mut shell, Message::OpenSettings),
+        vec![DaemonCall::LoadHistory {
+            since_seconds: crate::history::TimeRange::Day.since_seconds(),
+        }]
+    );
     assert_eq!(shell.settings, Visibility::Focus);
     shell.settle_focus();
     assert_eq!(shell.settings, Visibility::Open);

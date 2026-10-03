@@ -61,6 +61,8 @@ pub enum AppMessage {
     Nop,
     /// Time to ask the daemon for outputs, gamepads, and players.
     PollDevices,
+    /// Time to reload history or the user unit.
+    PollPage,
 }
 
 /// Builds the iced daemon from `cli`. Logging is already set up.
@@ -133,6 +135,9 @@ fn subscription(app: &App) -> Subscription<AppMessage> {
     ];
     if app.shell.settings.is_open() && matches!(app.shell.link, Link::Up(_)) {
         subs.push(iced::time::every(Duration::from_secs(1)).map(|_| AppMessage::PollDevices));
+    }
+    if crate::model::page_poll(&app.shell) {
+        subs.push(iced::time::every(Duration::from_secs(2)).map(|_| AppMessage::PollPage));
     }
     Subscription::batch(subs)
 }
@@ -285,6 +290,9 @@ fn update(app: &mut App, message: AppMessage) -> Task<AppMessage> {
             if app.shell.settings.is_open() && matches!(app.shell.link, Link::Up(_)) {
                 calls.push(DaemonCall::RefreshDevices);
             }
+        }
+        AppMessage::PollPage => {
+            calls = crate::model::update(&mut app.shell, Message::PollPage);
         }
     }
     if app.shell.quit {

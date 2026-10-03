@@ -4,7 +4,9 @@
 use stillwatch_core::state::State;
 
 use crate::calibration::{self, CalMsg};
+use crate::history::{self, HistMsg};
 use crate::page::Page;
+use crate::service::{self, SvcMsg};
 use crate::settings::{self, Catalog};
 use crate::shell::{
     DaemonCall, DaemonEvent, Link, Message, Shell, Snapshot, TrayAction, Visibility, snooze_seconds,
@@ -39,25 +41,58 @@ fn probe_call(shell: &mut Shell) -> Option<DaemonCall> {
 
 fn apply(shell: &mut Shell, message: Message) -> Vec<DaemonCall> {
     match message {
-        Message::Navigate(page) => shell.page = page,
+        Message::Navigate(page) => {
+            shell.page = page;
+            return page_calls(shell);
+        }
         Message::OpenSettings => {
             shell.settings = shell.settings.reveal();
-            return refresh_devices(shell);
+            let mut calls = refresh_devices(shell);
+            calls.extend(page_calls(shell));
+            return calls;
         }
+        Message::PollPage => return page_calls(shell),
         Message::CloseSettings => shell.settings = Visibility::Closed,
         Message::OpenPrompt => shell.prompt = shell.prompt.reveal(),
         Message::ClosePrompt => shell.prompt = Visibility::Closed,
         Message::Quit => shell.quit = true,
         Message::Settings(message) => return settings_msg(shell, message),
         Message::Calibration(message) => return calibration_msg(shell, message),
+        Message::History(message) => return history::apply(&mut shell.history, message),
+        Message::Service(message) => return service::apply(&mut shell.service, message),
         Message::Tray(action) => return tray(shell, action),
         Message::BecamePrimary { first, mode } => {
             shell.apply_launch(mode, first);
-            return refresh_devices(shell);
+            let mut calls = refresh_devices(shell);
+            calls.extend(page_calls(shell));
+            return calls;
         }
         Message::Daemon(event) => return apply_daemon(shell, event),
     }
     Vec::new()
+}
+
+/// History and the user unit are polled only while their page is open.
+#[must_use]
+pub(crate) fn page_poll(shell: &Shell) -> bool {
+    shell.settings.is_open() && matches!(shell.page, Page::History | Page::Service)
+}
+
+fn page_calls(shell: &Shell) -> Vec<DaemonCall> {
+    if !shell.settings.is_open() {
+        return Vec::new();
+    }
+    match shell.page {
+        Page::History => vec![history_call(shell)],
+        Page::Service => vec![DaemonCall::RefreshUnit, DaemonCall::ReadAutostart],
+        Page::Settings | Page::Calibration => Vec::new(),
+    }
+}
+
+fn history_call(shell: &Shell) -> DaemonCall {
+    DaemonCall::LoadHistory {
+        since_seconds: shell.history.since_seconds(),
+    }
 }
 
 fn refresh_devices(shell: &Shell) -> Vec<DaemonCall> {
@@ -96,14 +131,23 @@ fn apply_daemon(shell: &mut Shell, event: DaemonEvent) -> Vec<DaemonCall> {
             shell.devices = Catalog::default();
             shell.capture_backend = None;
             shell.capture_known = false;
-            Vec::new()
+            shell.panel_care = None;
+            if shell.settings.is_open() && shell.page == Page::History {
+                vec![history_call(shell)]
+            } else {
+                Vec::new()
+            }
         }
         DaemonEvent::Snapshot(snapshot) => {
             shell.config_ok = Some(snapshot.config_errors.is_empty());
             shell.config_errors.clone_from(&snapshot.config_errors);
             shell.link = Link::Up(snapshot);
             shell.notice = None;
-            refresh_devices(shell)
+            let mut calls = refresh_devices(shell);
+            if shell.settings.is_open() && shell.page == Page::History {
+                calls.push(history_call(shell));
+            }
+            calls
         }
         DaemonEvent::State(state) => {
             apply_state(shell, state);
@@ -142,6 +186,21 @@ fn apply_daemon(shell: &mut Shell, event: DaemonEvent) -> Vec<DaemonCall> {
             if shell.settings.is_open() && shell.page == Page::Calibration {
                 shell.calibration.view = Some(view);
             }
+            Vec::new()
+        }
+        DaemonEvent::History(result) => {
+            let message = match result {
+                Ok(load) => HistMsg::Loaded(load),
+                Err(text) => HistMsg::Failed(text),
+            };
+            history::apply(&mut shell.history, message)
+        }
+        DaemonEvent::Unit(view) => service::apply(&mut shell.service, SvcMsg::Unit(view)),
+        DaemonEvent::Autostart(enabled) => {
+            service::apply(&mut shell.service, SvcMsg::AutostartState(enabled))
+        }
+        DaemonEvent::Panel(care) => {
+            shell.panel_care = care;
             Vec::new()
         }
     }

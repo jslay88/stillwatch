@@ -37,8 +37,14 @@ pub async fn dispatch(proxy: &StillwatchProxy<'_>, call: DaemonCall) -> Result<(
         DaemonCall::Reload => proxy.reload().await.map(|_| ()),
         DaemonCall::StartProbe { interval_ms } => proxy.start_probe(interval_ms).await,
         DaemonCall::StopProbe => proxy.stop_probe().await,
-        // `watch` answers this before `dispatch`. The arm keeps the match closed.
-        DaemonCall::RefreshDevices => Ok(()),
+        // `on_call` answers these before `dispatch`. The arms keep the match closed.
+        DaemonCall::RefreshDevices
+        | DaemonCall::LoadHistory { .. }
+        | DaemonCall::RefreshUnit
+        | DaemonCall::Unit(_)
+        | DaemonCall::ReadAutostart
+        | DaemonCall::SetAutostart(_)
+        | DaemonCall::OpenJournal => Ok(()),
     };
     result.map_err(Error::from)
 }
@@ -93,7 +99,7 @@ pub async fn watch(
             Wake::Call(None) | Wake::OwnerEnded => break,
             Wake::Call(Some(call)) => {
                 let proxy = live.as_ref().map(|live| live.proxy.clone());
-                on_call(proxy, call, &events).await;
+                on_call(&connection, proxy, call, &events).await;
             }
             Wake::Appeared(true) => {
                 live = attach(&connection, &events).await;
@@ -219,6 +225,7 @@ async fn publish_status(
     let _ = events
         .send(DaemonEvent::Capture(status.capture_backend))
         .await;
+    let _ = events.send(DaemonEvent::Panel(status.panel_care)).await;
     Ok(())
 }
 
@@ -232,16 +239,46 @@ async fn refresh_devices(proxy: &StillwatchProxy<'_>, events: &mpsc::Sender<Daem
 }
 
 async fn on_call(
+    connection: &Connection,
     proxy: Option<StillwatchProxy<'static>>,
     call: DaemonCall,
     events: &mpsc::Sender<DaemonEvent>,
 ) {
-    if matches!(call, DaemonCall::RefreshDevices) {
-        if let Some(proxy) = proxy {
-            refresh_devices(&proxy, events).await;
+    match call {
+        DaemonCall::RefreshDevices => {
+            if let Some(proxy) = proxy {
+                refresh_devices(&proxy, events).await;
+            }
         }
-        return;
+        DaemonCall::LoadHistory { since_seconds } => {
+            crate::history::fetch(proxy.as_ref(), since_seconds, events).await;
+        }
+        DaemonCall::RefreshUnit => crate::service::refresh_unit(connection, events).await,
+        DaemonCall::Unit(op) => crate::service::change_unit(connection, op, events).await,
+        DaemonCall::ReadAutostart => crate::service::read_autostart(events).await,
+        DaemonCall::SetAutostart(enabled) => {
+            crate::service::write_autostart(enabled, events).await;
+        }
+        DaemonCall::OpenJournal => {
+            if let Err(err) = crate::service::open_journal() {
+                let _ = events.send(DaemonEvent::CallFailed(err)).await;
+            }
+        }
+        DaemonCall::Snooze { .. }
+        | DaemonCall::CancelSnooze
+        | DaemonCall::Pause
+        | DaemonCall::Resume
+        | DaemonCall::Reload
+        | DaemonCall::StartProbe { .. }
+        | DaemonCall::StopProbe => dispatch_live(proxy, call, events).await,
     }
+}
+
+async fn dispatch_live(
+    proxy: Option<StillwatchProxy<'static>>,
+    call: DaemonCall,
+    events: &mpsc::Sender<DaemonEvent>,
+) {
     let Some(proxy) = proxy else {
         let _ = events
             .send(DaemonEvent::CallFailed(NOT_RUNNING.to_owned()))
