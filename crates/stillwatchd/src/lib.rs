@@ -14,6 +14,7 @@ pub mod idle;
 pub mod media;
 pub mod prompt;
 pub mod service;
+pub mod session;
 pub mod signals;
 pub mod supervise;
 mod wayland;

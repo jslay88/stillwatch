@@ -10,12 +10,11 @@ use zbus::proxy::CacheProperties;
 use zbus::zvariant::OwnedValue;
 use zbus::{Connection, MatchRule};
 
-pub(crate) use crate::dbus::Bus;
-
 use super::players::{Player, PlayerSet};
 use super::properties::{
     OBJECT_PATH, PLAYBACK_STATUS, PLAYER_INTERFACE, ROOT_INTERFACE, is_playing, player_name,
 };
+use crate::dbus::{self, Bus};
 
 /// A player that doesn't answer within this long counts as not playing, so
 /// one hung player can't stall the watcher.
@@ -28,12 +27,7 @@ const STATUS_REQUEST: (&str, &str) = (PLAYER_INTERFACE, PLAYBACK_STATUS);
 
 /// Opens a new connection to `bus`.
 pub(crate) async fn connect(bus: &Bus) -> Result<Connection, BackendError> {
-    bus.builder()
-        .map_err(|err| BackendError::Unavailable(format!("session bus: {err}")))?
-        .method_timeout(CALL_TIMEOUT)
-        .build()
-        .await
-        .map_err(disconnected)
+    dbus::connect(bus, CALL_TIMEOUT).await
 }
 
 /// `NameOwnerChanged` for every `org.mpris.MediaPlayer2.*` name.
