@@ -1,0 +1,106 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/stillwatch-core",
+    "crates/stillwatch-ipc",
+    "crates/stillwatchd",
+    "crates/stillwatch-cli",
+    "crates/stillwatch-gui",
+    "xtask",
+]
+default-members = [
+    "crates/stillwatch-core",
+    "crates/stillwatch-ipc",
+    "crates/stillwatchd",
+    "crates/stillwatch-cli",
+    "crates/stillwatch-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/jslay88/stillwatch"
+authors = ["Justin Slay <justin.slay@gmail.com>"]
+publish = false
+
+[workspace.dependencies]
+# Internal crates
+stillwatch-core = { path = "crates/stillwatch-core" }
+stillwatch-ipc = { path = "crates/stillwatch-ipc" }
+
+# Async runtime and utilities
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "process", "fs", "io-util", "net"] }
+tokio-util = "0.7"
+futures-util = "0.3"
+
+# Wayland
+wayland-client = "0.31"
+wayland-backend = "0.3"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+wayland-protocols-plasma = { version = "0.3", features = ["client"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+smithay-client-toolkit = "0.21"
+
+# Devices
+ddc-hi = "0.4"
+evdev = { version = "0.13", features = ["tokio"] }
+tokio-udev = "0.10"
+
+# D-Bus and portals
+zbus = { version = "5.19", default-features = false, features = ["tokio"] }
+ashpd = { version = "0.13", default-features = false, features = ["tokio"] }
+pipewire = "0.10"
+
+# Serialization and config
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1.1"
+toml_edit = "0.25"
+notify = "8"
+jiff = { version = "0.2", features = ["serde"] }
+dirs = "7"
+rustix = { version = "1.1", features = ["pipe", "fs", "process"] }
+
+# CLI and GUI
+clap = { version = "4.6", features = ["derive"] }
+humantime = "2.4"
+iced = { version = "0.14", features = ["tokio", "canvas"] }
+ksni = "0.3"
+
+# Logging and errors
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-journald = "0.3"
+thiserror = "2"
+anyhow = "1"
+
+# Dev and tooling
+proptest = "1.11"
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+tempfile = "3"
+syn = { version = "2", features = ["full", "visit", "parsing"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+walkdir = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "warn"
+module_name_repetitions = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
