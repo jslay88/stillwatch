@@ -447,10 +447,15 @@ async fn nodes_that_arent_gamepads_are_closed_skipped_and_logged_once() {
     eventually(|| keyboard.inputs.is_closed()).await;
 
     h.change(Hotplug::Added(KEYBOARD.into()));
-    let buttons_only = h.plug_with(OTHER, "Button Box", &[Key::BTN_TRIGGER], Axes::default());
+    let stream = h.plug_with(
+        OTHER,
+        "stream-controller",
+        &[Key::KEY_A, Key::BTN_TRIGGER],
+        Axes::default(),
+    );
     h.change(Hotplug::Added(OTHER.into()));
     eventually(|| h.open_calls() == 3).await;
-    eventually(|| buttons_only.inputs.is_closed()).await;
+    eventually(|| stream.inputs.is_closed()).await;
     assert_eq!(h.device_ids(), [PAD]);
     assert_eq!(logs.count("not a gamepad"), 2);
     assert_eq!(logs.count("Keychron K5 System Control"), 1);
@@ -465,6 +470,17 @@ async fn nodes_that_arent_gamepads_are_closed_skipped_and_logged_once() {
     h.change(Hotplug::Added(KEYBOARD.into()));
     eventually(|| h.device_ids() == [KEYBOARD, PAD]).await;
     assert_eq!(h.open_calls(), 4);
+}
+
+#[tokio::test]
+async fn a_button_box_with_no_axes_counts_as_a_gamepad() {
+    let mut h = Harness::new(&GamepadSettings::default());
+    h.present(&[PAD]);
+    let mut pad = h.plug_with(PAD, "Button Box", &[Key::BTN_TRIGGER], Axes::default());
+    h.start();
+    eventually(|| h.device_ids() == [PAD]).await;
+    pad.send(PadInput::Button).await;
+    assert_eq!(h.activity(), [PAD]);
 }
 
 #[tokio::test]
