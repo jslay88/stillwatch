@@ -79,11 +79,52 @@ on_blank_cmd = "lg-webos-cli screen-off"
 on_resume_cmd = "lg-webos-cli screen-on"
 ```
 
+## Install
+
+`cargo xtask install` builds the release binaries and installs them with the systemd user unit, desktop files, and icons. It does not enable the unit or start `stillwatchd`.
+
+```sh
+cargo xtask install                  # prefix ~/.local
+cargo xtask install --prefix /usr    # needs root
+cargo xtask uninstall --prefix ~/.local
+```
+
+`/usr` uses `/usr/bin`, `/usr/lib/systemd/user`, and `/usr/share`. Any other prefix uses the XDG layout under that directory (`bin/`, `share/systemd/user/`, `share/applications/`, `share/icons/`), which is what systemd and KWin search for a `~/.local` install.
+
+| Installed | Path |
+| -- | -- |
+| `stillwatch`, `stillwatchd`, `stillwatch-gui` | `<prefix>/bin` |
+| `stillwatch.service` | `~/.local/share/systemd/user/` or `/usr/lib/systemd/user/` |
+| Settings launcher | `<prefix>/share/applications/io.github.jslay88.Stillwatch.desktop` (`Exec=stillwatch-gui settings`) |
+| ScreenShot2 grant | `<prefix>/share/applications/io.github.jslay88.Stillwatch.Daemon.desktop` |
+| Tray autostart template | `<prefix>/share/stillwatch/io.github.jslay88.Stillwatch.Tray.desktop` |
+| Icons | `<prefix>/share/icons/hicolor/scalable/` |
+
+The daemon desktop file's `Exec=` is the absolute path of the installed `stillwatchd`. The files in the repo say `/usr/bin/stillwatchd`; install rewrites that when the prefix is not `/usr`. KWin resolves the first `Exec=` word (symlinks included) and compares it to `/proc/<pid>/exe`, so the path has to be the real binary. The unit's `ExecStart=` is the same path.
+
+When install finishes it prints:
+
+```
+systemctl --user daemon-reload && systemctl --user enable --now stillwatch
+```
+
+Run that when you want the daemon in the Plasma session. The unit is `PartOf=`, `After=`, and `WantedBy=graphical-session.target`, so it starts and stops with the graphical session. `Restart=on-failure` and `RestartSec=5s` cover a crash. `systemctl --user reload stillwatch` runs `ExecReload=/usr/bin/kill -HUP $MAINPID`, and SIGHUP reloads the config.
+
+Logs go to the journal (`journalctl --user -u stillwatch`). systemd sets `JOURNAL_STREAM` on the unit and `stillwatchd` logs through `tracing-journald` when that matches stderr.
+
+There is no D-Bus activation file. A bus activation would start `stillwatchd` on the first name lookup, outside the graphical session (no Wayland, and no journal stream attached to the unit). `stillwatch` already exits 3 when the name has no owner instead of starting a daemon.
+
+The tray does not autostart on install. Copy `io.github.jslay88.Stillwatch.Tray.desktop` from `<prefix>/share/stillwatch/` to `~/.config/autostart/` when you want the tray at login. The settings launcher is the desktop file in `share/applications`.
+
+Icons: `io.github.jslay88.Stillwatch` is the app icon. Status icons `io.github.jslay88.Stillwatch-{down,active,monitoring,prompting,snoozed,acting,blanked,locked,paused}` are the tray states (same colors as the pixmaps).
+
+`cargo xtask uninstall` removes the files and prints `systemctl --user disable --now stillwatch && systemctl --user daemon-reload`. It does not run that, and it does not stop a daemon that is already up.
+
 ## Screen capture on KDE
 
 On KDE, Stillwatch captures the screen through KWin's `org.kde.KWin.ScreenShot2` D-Bus interface. There's no screen-sharing indicator or prompt, but KWin only answers programs it has authorized, and that's done with a `.desktop` file:
 
-- Install [`packaging/io.github.jslay88.Stillwatch.Daemon.desktop`](packaging/io.github.jslay88.Stillwatch.Daemon.desktop) into `~/.local/share/applications/` (just you) or `/usr/share/applications/` (system wide). Any `applications/` directory under `$XDG_DATA_HOME` or `$XDG_DATA_DIRS` works.
+- `cargo xtask install` writes [`packaging/io.github.jslay88.Stillwatch.Daemon.desktop`](packaging/io.github.jslay88.Stillwatch.Daemon.desktop) into the prefix's `share/applications/` with `Exec=` set to the installed `stillwatchd`. For a hand install, copy that file into `~/.local/share/applications/` (just you) or `/usr/share/applications/` (system wide) and edit `Exec=` if the binary is not `/usr/bin/stillwatchd`. Any `applications/` directory under `$XDG_DATA_HOME` or `$XDG_DATA_DIRS` works.
 - `Exec=` has to be the absolute path of the `stillwatchd` that runs. The shipped file says `/usr/bin/stillwatchd`; if yours lives somewhere else (`~/.cargo/bin/stillwatchd`, a build directory), edit `Exec=` to that full path. `~` and bare command names don't work.
 - `X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2` is the line that grants access. The file name doesn't matter, and `NoDisplay=true` keeps it out of menus.
 
@@ -124,7 +165,7 @@ cargo xtask ci              # every gate, in the same order as CI
 cargo xtask ci --fast       # fmt, clippy, size only
 ```
 
-Individual gates: `cargo xtask gate <fmt|clippy|size|jscpd|deny|machete|coverage|bench>`. A gate whose tool isn't installed is skipped with a message, `--strict` turns that into a failure.
+Individual gates: `cargo xtask gate <fmt|clippy|size|jscpd|deny|machete|coverage|packaging|bench>`. A gate whose tool isn't installed is skipped with a message, `--strict` turns that into a failure. `packaging` runs `systemd-analyze verify --user` on `packaging/stillwatch.service` and `desktop-file-validate` on the desktop files.
 
 - `cargo xtask check-size [--max 400]` fails on any `.rs` file over 400 lines, not counting `#[cfg(test)]` items. Put big tests in a sibling `tests.rs` via `#[cfg(test)] mod tests;`.
 - `cargo xtask coverage` runs the tests under `cargo llvm-cov nextest` and requires 80% line coverage for the workspace and 90% for `stillwatch-core`. Binary `main.rs` files and `xtask` are excluded. The lcov report lands in `target/coverage/lcov.info`.
@@ -145,7 +186,7 @@ STILLWATCH_REQUIRE_KWIN=1 cargo nextest run --test wayland_idle
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on every PR, in an `archlinux:latest` container with the Rust version from `.tool-versions`. Both jobs call the same `cargo xtask` subcommands as above.
 
-- **lint**: fmt, clippy, check-size, jscpd, cargo deny, cargo machete, and building the benches. Every gate runs even if an earlier one failed, so one push shows all of them.
+- **lint**: fmt, clippy, check-size, jscpd, cargo deny, cargo machete, the packaging file check (`systemd-analyze`, `desktop-file-validate`), and building the benches. Every gate runs even if an earlier one failed, so one push shows all of them.
 - **test**: `cargo xtask coverage`, unit and integration tests together, with `STILLWATCH_REQUIRE_DBUS=1` and `STILLWATCH_REQUIRE_KWIN=1`. The lcov report is uploaded as the `lcov` artifact.
 
 ## License

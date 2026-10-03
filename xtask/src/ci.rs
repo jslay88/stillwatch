@@ -87,13 +87,13 @@ mod tests {
             }
         );
         assert_eq!(
-            plans[6],
+            plans[7],
             Plan::Skip {
                 gate: Gate::Coverage,
                 missing: "cargo-nextest"
             }
         );
-        assert_eq!(plans[7], Plan::Run(Gate::Bench));
+        assert_eq!(plans[8], Plan::Run(Gate::Bench));
     }
 
     #[test]

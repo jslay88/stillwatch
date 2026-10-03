@@ -1,0 +1,28 @@
+[Unit]
+Description=Stillwatch OLED burn-in protection
+Documentation=https://github.com/jslay88/stillwatch
+PartOf=graphical-session.target
+After=graphical-session.target
+
+# D-Bus activation is intentionally omitted. stillwatchd belongs to the
+# graphical session: it needs Wayland, and it logs to the journal because
+# systemd sets JOURNAL_STREAM on this unit. A bus activation file would start
+# it on the first name lookup, including from `stillwatch` when no session is
+# up. The CLI already treats a missing name as "stillwatchd is not running"
+# (exit 3) instead of activating a daemon.
+
+[Service]
+Type=simple
+# `cargo xtask install` rewrites this when the prefix is not /usr. KWin
+# authorizes ScreenShot2 against the canonical stillwatchd path, so this has
+# to be the installed binary, not a PATH lookup.
+ExecStart=/usr/bin/stillwatchd
+# Absolute path: systemd rejects a bare `kill` in ExecReload.
+ExecReload=/usr/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+# stdout/stderr stay on the journal (the user-service default). stillwatchd
+# switches to tracing-journald when JOURNAL_STREAM matches stderr.
+
+[Install]
+WantedBy=graphical-session.target

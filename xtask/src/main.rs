@@ -8,6 +8,8 @@ mod coverage;
 mod gate;
 mod gen_docs;
 mod hooks;
+mod install;
+mod packaging;
 mod process;
 mod size;
 mod workspace;
@@ -57,6 +59,20 @@ enum Command {
     Coverage,
     /// Point `core.hooksPath` at `.githooks` so the pre-commit hook runs.
     InstallHooks,
+    /// Build release binaries and install them with the unit, desktop files, and icons.
+    ///
+    /// Prints the `systemctl --user` enable hint. Does not enable or start the unit.
+    Install {
+        /// Install prefix. `~` is the home directory. `/usr` uses vendor paths.
+        #[arg(long, default_value = "~/.local")]
+        prefix: String,
+    },
+    /// Remove the files [`Install`](Command::Install) wrote. Does not stop the daemon.
+    Uninstall {
+        /// Prefix previously passed to `install`.
+        #[arg(long, default_value = "~/.local")]
+        prefix: String,
+    },
     /// Regenerate `docs/config.md` from the settings schema.
     GenDocs {
         /// Fail if the committed file is out of date instead of rewriting it.
@@ -76,6 +92,8 @@ fn main() -> Result<()> {
         Command::CheckSize { max } => size::check(&root, max),
         Command::Coverage => coverage::run(&root),
         Command::InstallHooks => hooks::install(&root),
+        Command::Install { prefix } => install::install(&root, &prefix),
+        Command::Uninstall { prefix } => install::uninstall(&root, &prefix),
         Command::GenDocs { check } => gen_docs::run(&root, check),
     }
 }

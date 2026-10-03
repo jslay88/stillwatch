@@ -52,6 +52,9 @@ jobs:
       - name: cargo machete
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: cargo xtask gate machete --strict
+      - name: packaging files
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask gate packaging --strict
       - name: build benches
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: cargo xtask gate bench --strict
