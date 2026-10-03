@@ -56,6 +56,9 @@ pub(super) struct Built {
     pub clock: Arc<dyn Clock>,
     pub detector: Box<dyn StaleDetector>,
     pub apply_config: ApplyConfig,
+    /// When set, the loop watches `wl_output` on `WAYLAND_DISPLAY`. Tests
+    /// leave this off so they never open the desktop session.
+    pub watch_outputs: bool,
 }
 
 impl Built {
@@ -126,6 +129,7 @@ pub(super) async fn assemble(config: &Config) -> anyhow::Result<Built> {
         clock,
         detector: Box::new(stillwatch_core::detector::BlockDetector::new(config)),
         apply_config,
+        watch_outputs: true,
     })
 }
 

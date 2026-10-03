@@ -20,7 +20,7 @@ use tokio::task::JoinHandle;
 use super::inbox::Incoming;
 use super::parts::{ApplyConfig, Built};
 use super::shared::{Shared, lock};
-use super::spawn::{spawn_activity, spawn_config_watcher, spawn_sources};
+use super::spawn::{spawn_activity, spawn_config_watcher, spawn_hotplug, spawn_sources};
 use crate::action::ActionRunner;
 use crate::config_watch::{ReloadSignal, ReloadTrigger, Reloader};
 use crate::service::{DaemonStatus, ServiceSignals};
@@ -37,6 +37,12 @@ pub(super) struct Wiring<R> {
     pub reload_signal: R,
     pub states: Option<ServiceSignals>,
     pub panel: crate::panel::PanelStore,
+}
+
+/// Whether the loop watches `wl_output`.
+enum Hotplug {
+    Off,
+    On,
 }
 
 /// Owns the state machine and every task the loop spawned.
@@ -73,6 +79,7 @@ pub(super) struct Engine<R> {
     dpms: Arc<dyn Blanker>,
     overlay: Arc<dyn Blanker>,
     ddc: Arc<dyn Blanker>,
+    hotplug: Hotplug,
     pub(super) jobs: Vec<JoinHandle<()>>,
     pub(super) activity_job: Option<JoinHandle<()>>,
     pub(super) probe_task: Option<JoinHandle<()>>,
@@ -119,6 +126,11 @@ impl<R: ReloadSignal> Engine<R> {
             dpms: built.dpms,
             overlay: built.overlay,
             ddc: built.ddc,
+            hotplug: if built.watch_outputs {
+                Hotplug::On
+            } else {
+                Hotplug::Off
+            },
             jobs: Vec::new(),
             activity_job: None,
             probe_task: None,
@@ -225,6 +237,10 @@ impl<R: ReloadSignal> Engine<R> {
             Arc::clone(&self.clock),
             self.out.clone(),
         );
+        if matches!(self.hotplug, Hotplug::On) {
+            self.jobs
+                .push(spawn_hotplug(Arc::clone(&self.clock), self.out.clone()));
+        }
         if let Some(job) = spawn_config_watcher(self.reloader.path(), self.out.clone()) {
             self.jobs.push(job);
         }

@@ -497,7 +497,7 @@ Helps the display's own compensation cycle run, which most OLED panels do in sta
 
 ## History
 
-The decision history behind `stillwatch history` and the History page. It holds numbers and state names only: no pixels, window titles, or track metadata.
+The decision history behind `stillwatch history` and the History page. It holds numbers, state names, and output connector names only: no pixels, window titles, or track metadata.
 
 ### `history.enabled`
 

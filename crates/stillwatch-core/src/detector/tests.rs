@@ -370,6 +370,39 @@ fn reset_and_drop_output_forget_history() {
 }
 
 #[test]
+fn a_reused_connector_name_starts_fresh() {
+    let mut detector = detector(2, 2);
+    persisted(&mut detector);
+    detector.set_outputs(&[OutputInfo::new("DP-1", 100, 100)]);
+    assert!(detector.blocks("DP-1").is_some());
+    detector.set_outputs(&[OutputInfo::new("DP-1", 100, 100).with_generation(1)]);
+    assert_eq!(detector.blocks("DP-1"), None);
+    let stats = feed(&mut detector, &[("DP-1", &[STILL; 4])], &[]);
+    assert!(!stats.stale);
+    assert_eq!(detector.blocks("DP-1").unwrap(), &[BlockState::Changed; 4]);
+}
+
+#[test]
+fn a_removed_output_drops_out_of_require_all() {
+    let mut config = config(2, 2);
+    config.stale.require = StaleRequire::All;
+    config.stale.persist_checks = 1;
+    let mut detector = BlockDetector::new(&config);
+    let frames: [(&str, &[f32]); 2] = [("DP-1", &[STILL; 4]), ("DP-2", &[STILL; 3])];
+    feed(&mut detector, &frames, &[]);
+    let stats = feed(&mut detector, &frames, &[]);
+    assert!(stats.outputs[0].stale);
+    assert!(!stats.outputs[1].stale);
+    assert!(!stats.stale, "require=all waits on every connected output");
+
+    detector.set_outputs(&[OutputInfo::new("DP-1", 100, 100)]);
+    assert_eq!(detector.blocks("DP-2"), None);
+    let only = feed(&mut detector, &[("DP-1", &[STILL; 4])], &[]);
+    assert!(only.stale);
+    assert_eq!(only.outputs.len(), 1);
+}
+
+#[test]
 fn set_outputs_drops_disconnected_outputs() {
     let mut detector = detector(2, 2);
     persisted(&mut detector);

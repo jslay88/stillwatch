@@ -24,6 +24,7 @@ pub(super) struct Handler;
 
 impl StateHandler for Handler {
     fn enter(&self, ctx: &mut Ctx, _via: &Transition) -> Option<Transition> {
+        ctx.snapshot_blank();
         ctx.hook(HookKind::OnBlank);
         super::super::care::on_blank(ctx);
         None
@@ -41,6 +42,7 @@ impl StateHandler for Handler {
                 if woke(ctx, output)
                     && next_reblank(ctx).is_some()
                     && !ctx.is_armed(TimerId::ReblankGrace)
+                    && ctx.reconnect_wake(output)
                 {
                     let grace = ctx.config.action.reblank_grace_seconds;
                     ctx.set_timer(TimerId::ReblankGrace, Duration::from_secs(u64::from(grace)));

@@ -60,6 +60,10 @@ pub struct BlockDetector {
     outputs: Vec<OutputInfo>,
     masks: HashMap<String, Vec<bool>>,
     trackers: BTreeMap<String, OutputTracker>,
+    /// Connector generation last applied by [`set_outputs`](Self::set_outputs).
+    /// A missing entry compares as 0, so the first list keeps counters that
+    /// were started before any output event.
+    generations: HashMap<String, u64>,
 }
 
 impl BlockDetector {
@@ -74,6 +78,7 @@ impl BlockDetector {
             outputs: Vec::new(),
             masks: HashMap::new(),
             trackers: BTreeMap::new(),
+            generations: HashMap::new(),
         }
     }
 
@@ -99,12 +104,25 @@ impl BlockDetector {
 
     /// Records the connected outputs (from `Event::OutputsChanged`).
     ///
-    /// Their sizes map ignore regions to blocks. Block state for outputs that
-    /// are no longer connected is dropped.
+    /// Their sizes map ignore regions to blocks. Block state is dropped when
+    /// an output disappears or its [`OutputInfo::generation`] changes, so a
+    /// reused connector name does not keep the old counters.
     pub fn set_outputs(&mut self, outputs: &[OutputInfo]) {
         self.outputs = outputs.to_vec();
-        self.trackers
-            .retain(|name, _| outputs.iter().any(|output| &output.name == name));
+        let incoming: HashMap<&str, u64> = outputs
+            .iter()
+            .map(|output| (output.name.as_str(), output.generation))
+            .collect();
+        self.trackers.retain(|name, _| {
+            let Some(generation) = incoming.get(name.as_str()) else {
+                return false;
+            };
+            self.generations.get(name).copied().unwrap_or(0) == *generation
+        });
+        self.generations = outputs
+            .iter()
+            .map(|output| (output.name.clone(), output.generation))
+            .collect();
         self.rebuild_masks();
     }
 

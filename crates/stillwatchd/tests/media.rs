@@ -191,6 +191,23 @@ async fn a_player_exiting_while_playing_leaves_the_set() -> TestResult {
 }
 
 #[tokio::test]
+async fn a_player_that_comes_back_is_subscribed_again() -> TestResult {
+    let Some(bus) = PrivateBus::start()? else {
+        return Ok(());
+    };
+    let mpv = FakePlayer::spawn(&bus, "mpv", "mpv", "Playing").await?;
+    let mut watch = Watch::start(&bus);
+    assert_eq!(watch.playing().await?, names(&["mpv"]));
+    mpv.exit().await?;
+    assert_eq!(watch.playing().await?, names(&[]));
+
+    let again = FakePlayer::spawn(&bus, "mpv", "mpv", "Playing").await?;
+    assert_eq!(watch.playing().await?, names(&["mpv"]));
+    assert_private(&[&again]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn players_appearing_later_are_picked_up() -> TestResult {
     let Some(bus) = PrivateBus::start()? else {
         return Ok(());

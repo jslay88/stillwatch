@@ -51,6 +51,10 @@ pub(super) fn on_event(ctx: &mut Ctx, event: &Event, applies: bool) -> Option<Tr
             }
             None
         }
+        Event::OutputsChanged(_) if wanted(ctx, applies) => {
+            ctx.resume_capture();
+            None
+        }
         Event::Timer(TimerId::Capture) if wanted(ctx, applies) => {
             ctx.request_capture();
             ctx.arm_capture();

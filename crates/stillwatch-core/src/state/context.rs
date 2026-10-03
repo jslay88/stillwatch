@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use jiff::Timestamp;
@@ -10,10 +10,13 @@ use crate::command::{BlankMethod, Command, HookKind};
 use crate::config::{ActionOutputs, Config};
 use crate::event::CaptureFrame;
 use crate::history::{DecisionContext, HistoryEntry, HistoryKind};
+use crate::luma::OutputInfo;
 use crate::panel::PanelTracker;
 use crate::prompt::{PromptRequest, StaleOutput};
 use crate::stats::DetectionStats;
 use crate::time::TimerId;
+
+mod hotplug;
 
 /// Where a handler wants to go, plus the details its history entry carries.
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +76,15 @@ pub(super) enum ActionStep {
     Blank(BlankMethod),
 }
 
+/// Whether the compositor idle watch is up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Compositor {
+    /// Up, or not yet reported down. Input idle may blank.
+    Up,
+    /// The watch returned an error. Activity is unknown.
+    Down,
+}
+
 /// Everything the handlers share: config, detector, observed facts, and the
 /// commands produced by the current step.
 pub(super) struct Ctx {
@@ -83,6 +95,18 @@ pub(super) struct Ctx {
     out: Vec<Command>,
     /// Aggregated input idle: compositor idle and no recent gamepad input.
     pub(super) idle: bool,
+    /// The compositor idle watch. Starts [`Compositor::Up`] so a machine that
+    /// has not heard from the watch still blanks on input idle.
+    compositor: Compositor,
+    /// How many times this process has lost the compositor idle watch.
+    reconnects: u32,
+    /// `None` until the first `OutputsChanged`. `Some` is the connected list,
+    /// which may be empty.
+    outputs: Option<Vec<OutputInfo>>,
+    /// Generations already counted as a wake-without-input this blank episode.
+    hotplug_wakes: HashMap<String, u64>,
+    /// Output generation at the moment Blanked was entered.
+    blank_generation: HashMap<String, u64>,
     pub(super) locked: bool,
     pub(super) playing: Vec<String>,
     pub(super) last_gamepad: Option<Instant>,
@@ -116,6 +140,11 @@ impl Ctx {
             wall: Timestamp::UNIX_EPOCH,
             out: Vec::new(),
             idle: false,
+            compositor: Compositor::Up,
+            reconnects: 0,
+            outputs: None,
+            hotplug_wakes: HashMap::new(),
+            blank_generation: HashMap::new(),
             locked: false,
             playing: Vec::new(),
             last_gamepad: None,
@@ -205,12 +234,29 @@ impl Ctx {
         }
     }
 
+    /// The compositor idle watch is up, so idle may blank.
+    pub(super) const fn activity_known(&self) -> bool {
+        matches!(self.compositor, Compositor::Up)
+    }
+
+    /// The idle watch is reporting again.
+    pub(super) fn mark_activity_known(&mut self) {
+        self.compositor = Compositor::Up;
+    }
+
     pub(super) fn arm_capture(&mut self) {
+        if self.captures_paused() {
+            self.disarm(TimerId::Capture);
+            return;
+        }
         let every = Duration::from_secs(u64::from(self.config.stale.check_interval_seconds));
         self.set_timer(TimerId::Capture, every);
     }
 
     pub(super) fn request_capture(&mut self) {
+        if self.captures_paused() {
+            return;
+        }
         self.emit(Command::RequestCapture {
             outputs: self.config.stale.monitored_outputs.clone(),
             downscale_width: self.config.stale.downscale_width,

@@ -1,4 +1,4 @@
-//! History holds numbers and state names only. Every kind, with every field
+//! History holds numbers, state names, and output connector names only. Every kind, with every field
 //! filled in, serializes to an allowlisted set of keys.
 
 use std::collections::BTreeSet;
@@ -35,6 +35,7 @@ const ALLOWED: &[&str] = &[
     "error_count",
     "from_version",
     "to_version",
+    "count",
     "media_playing",
     "gamepad_active",
     "locked",
@@ -61,6 +62,8 @@ fn every_kind() -> Vec<HistoryKind> {
         HistoryKind::PromptAnswered,
         HistoryKind::ConfigReloadFailed,
         HistoryKind::Migration,
+        HistoryKind::Reconnect,
+        HistoryKind::Hotplug,
     ];
     for kind in kinds {
         match kind {
@@ -74,7 +77,9 @@ fn every_kind() -> Vec<HistoryKind> {
             | HistoryKind::OverlayUsed
             | HistoryKind::PromptAnswered
             | HistoryKind::ConfigReloadFailed
-            | HistoryKind::Migration => {}
+            | HistoryKind::Migration
+            | HistoryKind::Reconnect
+            | HistoryKind::Hotplug => {}
         }
     }
     kinds.to_vec()
@@ -105,6 +110,8 @@ fn full_entry(kind: HistoryKind) -> HistoryEntry {
     .with_prompt(PromptMedium::Notification, PromptReason::Configured)
     .with_error_count(3)
     .with_versions(1, 2)
+    .with_output("HDMI-A-1")
+    .with_count(1)
     .with_context(DecisionContext {
         media_playing: true,
         gamepad_active: true,
@@ -159,6 +166,7 @@ fn strings_are_only_names_and_timestamps() {
         strings,
         [
             "2026-09-21T14:13:20Z",
+            "HDMI-A-1",
             "HDMI-A-1",
             "configured",
             "media",

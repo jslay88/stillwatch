@@ -292,6 +292,7 @@ fn test_built(
         clock,
         detector: Box::new(parts.detector),
         apply_config,
+        watch_outputs: false,
     }
 }
 

@@ -27,4 +27,4 @@ alwaysApply: true
 
 - Frames are downscaled to a luma grid and dropped. Never write pixels or luma values to disk, logs, history, or D-Bus.
 - Only per-block states (changed, persistent, dark, ignored) and percentages leave the detector.
-- History and logs hold numbers and state names only: no window titles, no track metadata.
+- History and logs hold numbers, state names, and output connector names only: no window titles, no track metadata, no pixels.

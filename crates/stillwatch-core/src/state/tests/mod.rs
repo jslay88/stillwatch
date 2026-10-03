@@ -3,6 +3,7 @@ mod blank_path;
 mod block_detector;
 mod gamepad;
 mod history;
+mod hotplug;
 mod locked;
 mod machine;
 mod panel;

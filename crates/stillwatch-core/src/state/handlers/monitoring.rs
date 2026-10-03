@@ -2,7 +2,7 @@
 //! `stale.check_interval_seconds` and fed to the detector.
 
 use super::{Ctx, State, StateHandler, Transition, is_input};
-use crate::event::{ControlCommand, Event, SessionEvent};
+use crate::event::{ActivityEvent, ControlCommand, Event, SessionEvent};
 use crate::time::TimerId;
 
 pub(super) struct Handler;
@@ -28,11 +28,16 @@ impl StateHandler for Handler {
                 ctx.arm_capture();
                 None
             }
-            Event::CaptureCompleted { frames } => {
+            Event::CaptureCompleted { frames } if ctx.activity_known() => {
                 let stats = ctx.observe(frames);
                 stats
                     .stale
                     .then(|| Transition::to(State::Prompting).with_detection(stats))
+            }
+            Event::Activity(ActivityEvent::Unknown) => Some(Transition::to(State::Active)),
+            Event::OutputsChanged(_) => {
+                ctx.resume_capture();
+                None
             }
             Event::Session(SessionEvent::Locked) => Some(Transition::to(State::Locked)),
             Event::Control(ControlCommand::Snooze(duration)) => ctx.snooze(*duration),

@@ -14,14 +14,14 @@
 
 mod desktop;
 mod reap;
+mod restart;
 mod sandbox;
 mod wayland;
 
 use std::ffi::{OsStr, OsString};
-use std::fs::File;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command};
 use std::time::Duration;
 
 use tokio::time::{Instant, sleep};
@@ -81,6 +81,9 @@ pub struct Kwin {
     child: Child,
     bus: PrivateBus,
     sandbox: Sandbox,
+    program: String,
+    args: Vec<String>,
+    ready_timeout: Duration,
 }
 
 impl Kwin {
@@ -115,16 +118,7 @@ impl Kwin {
         let Some(bus) = PrivateBus::spawn(daemon, required || bus::required())? else {
             return Ok(None);
         };
-        let log = File::create(sandbox.log_path())?;
-        let spawned = Command::new(program)
-            .args(args)
-            .env_clear()
-            .envs(sandbox.server_env(Some(bus.address())))
-            .current_dir(sandbox.runtime_dir())
-            .stdin(Stdio::null())
-            .stdout(log.try_clone()?)
-            .stderr(log)
-            .spawn();
+        let spawned = restart::spawn_child(program, args, &sandbox, bus.address());
         let child = match spawned {
             Ok(child) => child,
             Err(err) if err.kind() == ErrorKind::NotFound => {
@@ -140,6 +134,9 @@ impl Kwin {
             child,
             bus,
             sandbox,
+            program: program.to_owned(),
+            args: args.to_vec(),
+            ready_timeout: options.ready_timeout,
         };
         let started = Instant::now();
         kwin.wait_ready(started + options.ready_timeout).await?;

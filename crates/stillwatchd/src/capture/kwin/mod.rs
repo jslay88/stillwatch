@@ -15,10 +15,12 @@
 mod check;
 pub mod error;
 mod meta;
+mod owner;
 mod pipe;
 mod proxy;
 
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use stillwatch_core::backend::{BackendError, BackendFuture, ScreenCapture};
@@ -50,7 +52,7 @@ pub struct Capture {
 
 /// A [`ScreenCapture`] backed by `org.kde.KWin.ScreenShot2`.
 pub struct KwinCapture {
-    proxy: ScreenShot2Proxy<'static>,
+    proxy: Arc<Mutex<ScreenShot2Proxy<'static>>>,
     list_outputs: Box<ListOutputs>,
 }
 
@@ -84,6 +86,8 @@ impl KwinCapture {
             .build()
             .await
             .map_err(|err| error::call_error(err, "", &current_exe()))?;
+        let proxy = Arc::new(Mutex::new(proxy));
+        owner::follow(conn.clone(), Arc::clone(&proxy));
         let capture = Self {
             proxy,
             list_outputs: Box::new(|| Box::pin(crate::outputs::list())),
@@ -109,10 +113,17 @@ impl KwinCapture {
     ///
     /// [`BackendError::Unavailable`] when `KWin` doesn't serve the interface.
     pub async fn version(&self) -> Result<u32, BackendError> {
-        self.proxy
+        self.proxy()
             .version()
             .await
             .map_err(|err| error::call_error(err, "", &current_exe()))
+    }
+
+    fn proxy(&self) -> ScreenShot2Proxy<'static> {
+        self.proxy
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// Captures `output` and downscales it to `downscale_width` cells wide.
@@ -131,7 +142,7 @@ impl KwinCapture {
     ) -> Result<Capture, BackendError> {
         let (mut receiver, writer) = pipe::open()?;
         let reply = self
-            .proxy
+            .proxy()
             .capture_screen(output, proxy::capture_options(), Fd::from(&writer))
             .await;
         drop(writer);

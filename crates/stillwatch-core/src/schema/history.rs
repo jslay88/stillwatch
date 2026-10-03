@@ -7,7 +7,8 @@ pub(super) const SECTION: Section = Section {
     id: "history",
     title: "History",
     help: "The decision history behind `stillwatch history` and the History page. It holds \
-           numbers and state names only: no pixels, window titles, or track metadata.",
+           numbers, state names, and output connector names only: no pixels, \
+           window titles, or track metadata.",
     settings: &[
         Setting::new(
             "history.enabled",
