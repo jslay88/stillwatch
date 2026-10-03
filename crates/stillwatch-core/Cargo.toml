@@ -29,5 +29,9 @@ serde_json.workspace = true
 name = "detector"
 harness = false
 
+[[bench]]
+name = "luma"
+harness = false
+
 [lints]
 workspace = true
