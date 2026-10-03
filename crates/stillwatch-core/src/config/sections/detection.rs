@@ -108,6 +108,26 @@ impl StaleConfig {
         u64::from(self.persist_checks) * u64::from(self.check_interval_seconds)
     }
 
+    /// Whether `player` is on `media_ignore_players`.
+    ///
+    /// Matching ignores case, and an entry also covers that player's MPRIS
+    /// instances: `firefox` matches `firefox.instance_1_42`.
+    #[must_use]
+    pub fn is_player_ignored(&self, player: &str) -> bool {
+        self.media_ignore_players.iter().any(|ignored| {
+            player.get(..ignored.len()).is_some_and(|head| {
+                head.eq_ignore_ascii_case(ignored)
+                    && matches!(player.as_bytes().get(ignored.len()), None | Some(b'.'))
+            })
+        })
+    }
+
+    /// Whether any of the `playing` players is not ignored.
+    #[must_use]
+    pub fn media_playing(&self, playing: &[String]) -> bool {
+        playing.iter().any(|player| !self.is_player_ignored(player))
+    }
+
     pub(crate) fn validate(&self, issues: &mut Issues) {
         issues.at_least(
             "stale.check_interval_seconds",

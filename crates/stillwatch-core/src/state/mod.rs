@@ -1,9 +1,30 @@
-//! The daemon's top-level states.
+//! The state machine: the daemon's top-level states, the transition table,
+//! and the sans-IO [`StateMachine`] that walks it.
+//!
+//! Per-state behavior lives in one handler per state (`handlers/`), events
+//! every state treats alike in `handlers/common.rs`, and the facts handlers
+//! share (idle, lock, media, detector, blanked outputs) in `context.rs`.
+//! A new behavior is a row in [`TRANSITIONS`] plus the handler code that
+//! returns it.
+
+mod context;
+mod detector;
+mod handlers;
+mod machine;
+mod snooze;
+mod status;
+mod transitions;
 
 use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+
+pub use detector::StaleDetector;
+pub use machine::StateMachine;
+pub use snooze::{SnoozeError, validate_snooze};
+pub use status::StatusSnapshot;
+pub use transitions::{TRANSITIONS, TransitionRule, rule_for};
 
 /// A state of the Stillwatch state machine.
 ///
@@ -83,24 +104,4 @@ impl FromStr for State {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn names_round_trip_through_from_str_and_serde() {
-        for state in State::ALL {
-            assert_eq!(state.as_str().parse::<State>(), Ok(state));
-            assert_eq!(state.to_string(), state.as_str());
-            let json = serde_json::to_string(&state).unwrap();
-            assert_eq!(json, format!("\"{}\"", state.as_str()));
-            assert_eq!(serde_json::from_str::<State>(&json).unwrap(), state);
-        }
-    }
-
-    #[test]
-    fn unknown_name_is_an_error() {
-        let err = "sleeping".parse::<State>().unwrap_err();
-        assert_eq!(err, UnknownState("sleeping".into()));
-        assert_eq!(err.to_string(), "unknown state name: sleeping");
-    }
-}
+mod tests;

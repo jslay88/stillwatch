@@ -314,3 +314,20 @@ fn normal_path_seconds_does_not_overflow() {
         u64::from(u32::MAX) * u64::from(u32::MAX)
     );
 }
+
+#[test]
+fn media_ignore_matches_players_and_their_instances() {
+    let stale = StaleConfig {
+        media_ignore_players: vec!["spotify".into(), "firefox".into()],
+        ..StaleConfig::default()
+    };
+    assert!(stale.is_player_ignored("spotify"));
+    assert!(stale.is_player_ignored("Spotify"));
+    assert!(stale.is_player_ignored("firefox.instance_1_42"));
+    assert!(!stale.is_player_ignored("firefoxdev"));
+    assert!(!stale.is_player_ignored("vlc"));
+    assert!(!stale.is_player_ignored("spot"));
+    assert!(!stale.media_playing(&[]));
+    assert!(!stale.media_playing(&["spotify".into()]));
+    assert!(stale.media_playing(&["spotify".into(), "mpv".into()]));
+}
