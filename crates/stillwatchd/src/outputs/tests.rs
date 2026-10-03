@@ -77,6 +77,27 @@ fn rotated_outputs_swap_width_and_height() {
 }
 
 #[test]
+fn placement_keeps_position_and_scale() {
+    let mut output = OutputBuilder::default();
+    output.apply(wl_output::Event::Geometry {
+        x: 3840,
+        y: -100,
+        physical_width: 600,
+        physical_height: 340,
+        subpixel: WEnum::Value(Subpixel::Unknown),
+        make: String::new(),
+        model: String::new(),
+        transform: WEnum::Value(Transform::Normal),
+    });
+    output.apply(mode(Mode::Current, 1920, 1080));
+    output.apply(wl_output::Event::Scale { factor: 2 });
+    output.apply(name("DP-2"));
+    let placed = output.placed().unwrap();
+    assert_eq!(placed.info, OutputInfo::new("DP-2", 1920, 1080));
+    assert_eq!((placed.x, placed.y, placed.scale), (3840, -100, 2));
+}
+
+#[test]
 fn incomplete_outputs_are_skipped() {
     assert_eq!(built(vec![mode(Mode::Current, 1920, 1080)]), None);
     assert_eq!(built(vec![name("DP-2")]), None);
@@ -106,8 +127,18 @@ fn finish_keeps_complete_outputs_in_order() {
     assert_eq!(
         listing.finish(),
         [
-            OutputInfo::new("DP-1", 1920, 1080),
-            OutputInfo::new("HDMI-A-1", 3840, 2160)
+            PlacedOutput {
+                info: OutputInfo::new("DP-1", 1920, 1080),
+                x: 0,
+                y: 0,
+                scale: 1,
+            },
+            PlacedOutput {
+                info: OutputInfo::new("HDMI-A-1", 3840, 2160),
+                x: 0,
+                y: 0,
+                scale: 1,
+            },
         ]
     );
 }

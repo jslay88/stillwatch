@@ -25,8 +25,17 @@ pub const NAME_VERSION: u32 = 4;
 /// [`BackendError::Disconnected`] when no compositor is reachable, otherwise
 /// whatever [`list_on`] returns.
 pub async fn list() -> Result<Vec<OutputInfo>, BackendError> {
+    Ok(infos(list_placed().await?))
+}
+
+/// Lists outputs, including compositor position and scale.
+///
+/// # Errors
+///
+/// As [`list`].
+pub async fn list_placed() -> Result<Vec<PlacedOutput>, BackendError> {
     let conn = Connection::connect_to_env().map_err(|err| connect_error(&err))?;
-    list_on(&conn).await
+    list_placed_on(&conn).await
 }
 
 /// Lists outputs on `conn`, in the order the compositor advertises them.
@@ -36,6 +45,15 @@ pub async fn list() -> Result<Vec<OutputInfo>, BackendError> {
 /// [`BackendError::Disconnected`] or [`BackendError::Protocol`] if the
 /// connection fails part way.
 pub async fn list_on(conn: &Connection) -> Result<Vec<OutputInfo>, BackendError> {
+    Ok(infos(list_placed_on(conn).await?))
+}
+
+/// [`list_placed`] on an existing connection.
+///
+/// # Errors
+///
+/// As [`list_on`].
+pub async fn list_placed_on(conn: &Connection) -> Result<Vec<PlacedOutput>, BackendError> {
     let mut pump = EventPump::new(conn)?;
     let qh = pump.handle();
     let display = conn.display();
@@ -44,6 +62,10 @@ pub async fn list_on(conn: &Connection) -> Result<Vec<OutputInfo>, BackendError>
     let mut listing = Listing::default();
     pump.run_until(&mut listing, |listing| listing.done).await?;
     Ok(listing.finish())
+}
+
+fn infos(placed: Vec<PlacedOutput>) -> Vec<OutputInfo> {
+    placed.into_iter().map(|output| output.info).collect()
 }
 
 /// Which `wl_display.sync` a callback answers. Outputs are bound while the
@@ -63,7 +85,7 @@ struct Listing {
 }
 
 impl Listing {
-    fn finish(self) -> Vec<OutputInfo> {
+    fn finish(self) -> Vec<PlacedOutput> {
         if self.unnamed > 0 {
             tracing::warn!(
                 count = self.unnamed,
@@ -73,14 +95,32 @@ impl Listing {
         self.outputs
             .into_iter()
             .filter_map(|output| {
-                let info = output.build();
-                if info.is_none() {
+                let placed = output.placed();
+                if placed.is_none() {
                     tracing::warn!(?output, "skipping an output with no name or current mode");
                 }
-                info
+                placed
             })
             .collect()
     }
+}
+
+/// A connected output plus its place in the compositor's logical layout.
+///
+/// The portal reports each stream's position and size in that same space, so
+/// [`x`](Self::x) and [`y`](Self::y) are how a stream is matched to a
+/// connector. [`scale`](Self::scale) is the `wl_output` scale factor; the
+/// logical size is the mode size divided by it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlacedOutput {
+    /// Connector name and current mode size, in physical pixels.
+    pub info: OutputInfo,
+    /// Left edge in compositor coordinates.
+    pub x: i32,
+    /// Top edge in compositor coordinates.
+    pub y: i32,
+    /// `wl_output` scale, at least 1.
+    pub scale: i32,
 }
 
 /// One output's events, gathered until the listing is complete.
@@ -89,6 +129,10 @@ pub struct OutputBuilder {
     name: Option<String>,
     mode: Option<(u32, u32)>,
     rotated: bool,
+    x: i32,
+    y: i32,
+    /// Zero until a `scale` event arrives.
+    scale: i32,
 }
 
 impl OutputBuilder {
@@ -105,16 +149,32 @@ impl OutputBuilder {
                 self.mode = u32::try_from(width).ok().zip(u32::try_from(height).ok());
             }
             wl_output::Event::Geometry {
+                x,
+                y,
                 transform: WEnum::Value(transform),
                 ..
             } => {
+                self.x = x;
+                self.y = y;
                 self.rotated = matches!(
                     transform,
                     Transform::_90 | Transform::_270 | Transform::Flipped90 | Transform::Flipped270
                 );
             }
+            wl_output::Event::Scale { factor } => self.scale = factor,
             _ => {}
         }
+    }
+
+    /// The output and its layout, once it has a name and a current mode.
+    #[must_use]
+    pub fn placed(&self) -> Option<PlacedOutput> {
+        Some(PlacedOutput {
+            info: self.build()?,
+            x: self.x,
+            y: self.y,
+            scale: self.scale.max(1),
+        })
     }
 
     /// The output, once it has a name and a current mode.

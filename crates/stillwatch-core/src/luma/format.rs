@@ -150,6 +150,35 @@ impl PixelFormat {
             })
     }
 
+    /// The format for an `spa_video_format` value, as `PipeWire` reports it.
+    ///
+    /// Codes are the stable `spa_video_format` discriminants (`RGBx` is 7,
+    /// `BGRx` is 8, and so on). Packed 24-bit, planar YUV, and the 10-bit
+    /// `*_210LE` layouts are rejected.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UnsupportedFormat`] for formats Stillwatch can't decode.
+    pub fn from_spa(code: u32) -> Result<Self, UnsupportedFormat> {
+        let format = match code {
+            7 => Self::Rgbx8888,
+            8 => Self::Bgrx8888,
+            9 => Self::Xrgb8888,
+            11 => Self::Rgba8888,
+            12 => Self::Bgra8888,
+            13 => Self::Argb8888,
+            78 => Self::Rgba16Fpx4,
+            79 => Self::Rgba32Fpx4,
+            _ => {
+                return Err(UnsupportedFormat {
+                    family: FormatFamily::Spa,
+                    code,
+                });
+            }
+        };
+        Ok(format)
+    }
+
     /// The `QImage::Format` value, or `None` for the SPA-only byte orders.
     #[must_use]
     pub const fn qimage_code(self) -> Option<u32> {
@@ -243,6 +272,23 @@ mod tests {
             Ok(PixelFormat::Argb32Premultiplied)
         );
         assert_eq!(PixelFormat::from_qimage(31), Ok(PixelFormat::Rgba16Fpx4));
+    }
+
+    #[test]
+    fn spa_codes_cover_the_byte_orders_pipewire_sends() {
+        assert_eq!(PixelFormat::from_spa(7), Ok(PixelFormat::Rgbx8888));
+        assert_eq!(PixelFormat::from_spa(8), Ok(PixelFormat::Bgrx8888));
+        assert_eq!(PixelFormat::from_spa(9), Ok(PixelFormat::Xrgb8888));
+        assert_eq!(PixelFormat::from_spa(11), Ok(PixelFormat::Rgba8888));
+        assert_eq!(PixelFormat::from_spa(12), Ok(PixelFormat::Bgra8888));
+        assert_eq!(PixelFormat::from_spa(13), Ok(PixelFormat::Argb8888));
+        assert_eq!(PixelFormat::from_spa(78), Ok(PixelFormat::Rgba16Fpx4));
+        assert_eq!(PixelFormat::from_spa(79), Ok(PixelFormat::Rgba32Fpx4));
+        for code in [0, 1, 10, 14, 15, 16, 80] {
+            let err = PixelFormat::from_spa(code).unwrap_err();
+            assert_eq!(err.family, FormatFamily::Spa);
+            assert_eq!(err.code, code);
+        }
     }
 
     #[test]
