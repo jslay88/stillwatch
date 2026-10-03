@@ -1221,9 +1221,12 @@ dependencies = [
  "anyhow",
  "clap",
  "humantime",
+ "jiff",
  "stillwatch-core",
  "stillwatch-ipc",
+ "stillwatchd",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 

@@ -4,6 +4,7 @@
 //! the state machine, and the backend contracts. It performs no I/O apart from
 //! parsing, so everything here is unit-testable with fakes.
 
+pub mod activity;
 pub mod backend;
 pub mod backoff;
 pub mod command;
