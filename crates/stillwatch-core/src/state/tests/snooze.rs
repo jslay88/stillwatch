@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use crate::command::Command;
 use crate::config::{Config, PromptConfig};
 use crate::event::ControlCommand;
 use crate::mocks::Harness;
@@ -77,7 +78,9 @@ fn the_machine_validates_against_its_current_config() {
 fn an_invalid_snooze_answer_keeps_prompting() {
     let mut h = Harness::new();
     h.to_prompting();
-    assert_eq!(h.answer(PromptOutcome::Snooze(mins(721))), vec![]);
+    let commands = h.answer(PromptOutcome::Snooze(mins(721)));
+    assert_eq!(commands.len(), 1);
+    assert!(matches!(&commands[0], Command::Record(e) if e.snooze_seconds == Some(43_260)));
     assert_eq!(h.send(ControlCommand::Snooze(Duration::ZERO)), vec![]);
     assert_eq!(h.state(), State::Prompting);
     h.fire(TimerId::PromptCountdown);

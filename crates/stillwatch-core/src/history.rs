@@ -9,6 +9,7 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::command::BlankMethod;
+use crate::prompt::PromptOutcome;
 use crate::state::State;
 use crate::stats::DetectionStats;
 
@@ -30,6 +31,42 @@ pub enum HistoryKind {
     Ceiling,
     /// The config was reloaded.
     ConfigReload,
+    /// The prompt ended; `answer` says how.
+    PromptAnswered,
+    /// A config reload failed and the last good config stayed in effect.
+    ConfigReloadFailed,
+    /// The loaded config was migrated in memory from an older version.
+    Migration,
+}
+
+/// How a prompt ended, for [`HistoryKind::PromptAnswered`] entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptAnswer {
+    /// A snooze was picked; the length is in `snooze_seconds`.
+    Snooze,
+    /// "Custom..." was picked; the real answer follows later.
+    Custom,
+    /// The user cancelled.
+    Cancel,
+    /// The countdown ran out (the prompter's or Stillwatch's own).
+    Timeout,
+    /// The prompt was closed without an action.
+    Dismissed,
+    /// The prompt couldn't be shown or failed while showing.
+    Failed,
+}
+
+impl From<PromptOutcome> for PromptAnswer {
+    fn from(outcome: PromptOutcome) -> Self {
+        match outcome {
+            PromptOutcome::Snooze(_) => Self::Snooze,
+            PromptOutcome::CustomRequested => Self::Custom,
+            PromptOutcome::Cancel => Self::Cancel,
+            PromptOutcome::Timeout => Self::Timeout,
+            PromptOutcome::Dismissed => Self::Dismissed,
+        }
+    }
 }
 
 /// The inputs behind a decision, besides detection stats.
@@ -66,6 +103,19 @@ pub struct HistoryEntry {
     /// Snooze length in seconds, for `Snooze` entries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snooze_seconds: Option<u64>,
+    /// How the prompt ended, for `PromptAnswered` entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer: Option<PromptAnswer>,
+    /// Number of problems found, for `ConfigReloadFailed` entries. The
+    /// messages themselves are never recorded, since they can contain paths.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_count: Option<u32>,
+    /// Config version migrated from, for `Migration` entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_version: Option<u32>,
+    /// Config version migrated to, for `Migration` entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_version: Option<u32>,
     /// Media, gamepad, and lock state at decision time.
     #[serde(flatten)]
     pub context: DecisionContext,
@@ -83,6 +133,10 @@ impl HistoryEntry {
             detection: None,
             blank_method: None,
             snooze_seconds: None,
+            answer: None,
+            error_count: None,
+            from_version: None,
+            to_version: None,
             context: DecisionContext::default(),
         }
     }
@@ -122,6 +176,28 @@ impl HistoryEntry {
     #[must_use]
     pub fn with_context(mut self, context: DecisionContext) -> Self {
         self.context = context;
+        self
+    }
+
+    /// Attaches how the prompt ended.
+    #[must_use]
+    pub const fn with_answer(mut self, answer: PromptAnswer) -> Self {
+        self.answer = Some(answer);
+        self
+    }
+
+    /// Attaches the number of problems a failed reload found.
+    #[must_use]
+    pub const fn with_error_count(mut self, count: u32) -> Self {
+        self.error_count = Some(count);
+        self
+    }
+
+    /// Attaches the config versions a migration went between.
+    #[must_use]
+    pub const fn with_versions(mut self, from: u32, to: u32) -> Self {
+        self.from_version = Some(from);
+        self.to_version = Some(to);
         self
     }
 }
@@ -180,3 +256,6 @@ mod tests {
         assert_eq!(entry, HistoryEntry::new(at(), HistoryKind::Blank));
     }
 }
+
+#[cfg(test)]
+mod privacy;

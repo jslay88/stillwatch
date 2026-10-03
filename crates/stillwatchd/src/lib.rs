@@ -5,6 +5,7 @@
 
 pub mod args;
 pub mod gamepad;
+pub mod history;
 pub mod idle;
 pub mod media;
 pub mod signals;

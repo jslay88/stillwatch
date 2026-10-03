@@ -2,11 +2,11 @@
 
 use std::time::Duration;
 
-use super::{changed, records};
+use super::{changed, effects, record_kinds, records};
 use crate::command::{BlankMethod, Command, HookKind};
 use crate::config::{ActionMode, ActionOutputs, Config};
 use crate::event::Event;
-use crate::history::HistoryKind;
+use crate::history::{HistoryKind, PromptAnswer};
 use crate::mocks::Harness;
 use crate::state::State;
 use crate::time::TimerId;
@@ -54,10 +54,23 @@ fn desktop_blanking_first() {
         ]
     );
     let entries = records(h.log());
-    assert_eq!(entries.len(), 4);
-    assert!(entries.iter().all(|e| e.kind == HistoryKind::Transition));
+    assert_eq!(
+        record_kinds(h.log()),
+        [
+            HistoryKind::Transition,
+            HistoryKind::Transition,
+            HistoryKind::Prompt,
+            HistoryKind::PromptAnswered,
+            HistoryKind::Transition,
+            HistoryKind::Blank,
+            HistoryKind::Transition,
+        ]
+    );
     assert!(entries[1].detection.as_ref().is_some_and(|d| d.stale));
-    assert_eq!(entries[3].blank_method, Some(BlankMethod::Dpms));
+    assert_eq!(entries[2].detection, entries[1].detection);
+    assert_eq!(entries[3].answer, Some(PromptAnswer::Timeout));
+    assert_eq!(entries[5].blank_method, Some(BlankMethod::Dpms));
+    assert_eq!(entries[6].blank_method, Some(BlankMethod::Dpms));
     assert!(h.timers().is_empty());
 }
 
@@ -125,12 +138,13 @@ fn lock_and_blank_locks_first() {
     assert_eq!(commands.last(), Some(&Command::Lock));
     let commands = h.send(Event::ActionCompleted);
     assert_eq!(
-        commands,
+        effects(&commands),
         vec![Command::Blank {
             outputs: vec![],
             method: BlankMethod::Dpms,
         }]
     );
+    assert_eq!(record_kinds(&commands), [HistoryKind::Blank]);
     let commands = h.send(Event::ActionCompleted);
     assert_eq!(commands[0], changed(State::Acting, State::Blanked));
 }

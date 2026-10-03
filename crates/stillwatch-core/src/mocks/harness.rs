@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::ScriptedDetector;
 use crate::command::Command;
-use crate::config::Config;
+use crate::config::{Config, ConfigError, LoadOutcome};
 use crate::event::{ActivityEvent, CaptureFrame, Event};
 use crate::luma::LumaGrid;
 use crate::prompt::PromptOutcome;
@@ -94,6 +94,24 @@ impl Harness {
         let commands = self
             .machine
             .apply_config(self.clock.now(), self.clock.wall_now(), config);
+        self.absorb(&commands);
+        commands
+    }
+
+    /// Reports a reload that failed with `error`.
+    pub fn reload_failed(&mut self, error: &ConfigError) -> Vec<Command> {
+        let commands =
+            self.machine
+                .config_reload_failed(self.clock.now(), self.clock.wall_now(), error);
+        self.absorb(&commands);
+        commands
+    }
+
+    /// Reports a successful load that may have been migrated.
+    pub fn loaded(&mut self, outcome: &LoadOutcome) -> Vec<Command> {
+        let commands =
+            self.machine
+                .config_migrated(self.clock.now(), self.clock.wall_now(), outcome);
         self.absorb(&commands);
         commands
     }
