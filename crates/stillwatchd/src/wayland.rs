@@ -1,6 +1,15 @@
 //! Shared plumbing for Wayland backends: an async event pump over a
 //! [`Connection`] and the mapping from Wayland errors to [`BackendError`].
 
+mod connect;
+pub mod outputs;
+mod roundtrip;
+#[cfg(test)]
+pub mod test_server;
+
+pub use connect::connect_to;
+pub use roundtrip::Synced;
+
 use std::io::ErrorKind;
 use std::os::fd::{AsFd as _, OwnedFd};
 
