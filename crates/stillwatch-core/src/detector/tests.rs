@@ -217,6 +217,21 @@ fn media_threshold_needs_a_non_ignored_player_and_a_nonzero_percent() {
     assert!(stats.stale);
 }
 
+#[test]
+fn the_same_75_percent_grid_is_stale_only_under_the_normal_threshold() {
+    let seventy_five_percent = |block: usize| block < 25;
+    let mut normal = detector(10, 10);
+    let stats = settle(&mut normal, STILL, seventy_five_percent, &[]);
+    assert_percent(stats.outputs[0].persistent_percent, 75.0);
+    assert_eq!(stats.threshold, Threshold::new(70, ThresholdReason::Normal));
+    assert!(stats.stale);
+
+    let mut media = detector(10, 10);
+    let stats = settle(&mut media, STILL, seventy_five_percent, &players(&["mpv"]));
+    assert_percent(stats.outputs[0].persistent_percent, 75.0);
+    assert_eq!(stats.threshold, Threshold::new(90, ThresholdReason::Media));
+    assert!(!stats.stale);
+}
 fn two_outputs(require: StaleRequire) -> DetectionStats {
     let mut config = config(2, 2);
     config.stale.require = require;

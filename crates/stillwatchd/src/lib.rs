@@ -6,6 +6,7 @@
 pub mod args;
 pub mod gamepad;
 pub mod idle;
+pub mod media;
 pub mod signals;
 pub mod supervise;
 mod wayland;
