@@ -4,6 +4,7 @@
 use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use stillwatch_core::activity::{ActivityOutput, ActivitySettings};
 use stillwatch_core::backend::{
@@ -136,6 +137,20 @@ fn event_sink(out: mpsc::UnboundedSender<Incoming>) -> Arc<dyn EventSink> {
 
 fn backoff() -> Backoff {
     Backoff::new(BackoffPolicy::default())
+}
+
+/// `wl_output` hotplug. Each attempt gets a new epoch so a compositor
+/// restart cannot reuse the previous connection's generations.
+pub(super) fn spawn_hotplug(
+    clock: Arc<dyn Clock>,
+    out: mpsc::UnboundedSender<Incoming>,
+) -> JoinHandle<()> {
+    let epoch = Arc::new(AtomicU64::new(0));
+    spawn_supervised("outputs", clock, move || {
+        let generation_epoch = epoch.fetch_add(1, Ordering::Relaxed);
+        let sink = event_sink(out.clone());
+        async move { crate::hotplug::watch(generation_epoch, sink).await }
+    })
 }
 
 /// Config directory watcher. A failed start is logged; SIGHUP and `Reload()`

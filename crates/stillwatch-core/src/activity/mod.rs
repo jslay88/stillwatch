@@ -60,6 +60,10 @@ pub enum RawActivity {
     /// `CompositorIdle`, so the compositor state is unknown until it reports
     /// idle again. Unknown counts as active.
     WatchRestarted,
+    /// The idle watch returned an error. Sent before the reconnect back-off,
+    /// so the machine stops treating the user as idle while the compositor
+    /// is gone. This is not input and does not unblank.
+    WatchLost,
     /// A gamepad event passed the deadzone.
     Gamepad {
         /// [`GamepadDevice::id`](crate::backend::GamepadDevice::id) of the device.
@@ -169,6 +173,11 @@ impl ActivityAggregator {
                 if self.idle {
                     out.push(ActivityOutput::Machine(ActivityEvent::InputResumed));
                 }
+                self.wake(WakeSource::WatchRestarted, &mut out);
+            }
+            RawActivity::WatchLost => {
+                self.compositor_idle = false;
+                out.push(ActivityOutput::Machine(ActivityEvent::Unknown));
                 self.wake(WakeSource::WatchRestarted, &mut out);
             }
             RawActivity::Gamepad { device } => {

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use super::{Ctx, State, StateHandler, Transition, is_input};
 use crate::config::WhenLocked;
-use crate::event::{Event, SessionEvent};
+use crate::event::{ActivityEvent, Event, SessionEvent};
 use crate::time::TimerId;
 
 fn blanks(ctx: &Ctx) -> bool {
@@ -20,7 +20,7 @@ fn blanks(ctx: &Ctx) -> bool {
 /// (Re)starts the locked blank delay, unless the mode is `pause` or the
 /// system is going to sleep.
 fn arm(ctx: &mut Ctx) {
-    if blanks(ctx) && !ctx.asleep {
+    if blanks(ctx) && !ctx.asleep && ctx.activity_known() {
         let delay = Duration::from_secs(u64::from(ctx.config.session.locked_blank_seconds));
         ctx.set_timer(TimerId::LockedBlank, delay);
     }
@@ -41,7 +41,17 @@ impl StateHandler for Handler {
     fn on_event(&self, ctx: &mut Ctx, event: &Event) -> Option<Transition> {
         match event {
             Event::Session(SessionEvent::Unlocked) => Some(Transition::to(State::Active)),
-            Event::Timer(TimerId::LockedBlank) => Some(Transition::to(State::Acting)),
+            Event::Timer(TimerId::LockedBlank) if ctx.activity_known() => {
+                Some(Transition::to(State::Acting))
+            }
+            Event::Activity(ActivityEvent::Unknown) => {
+                ctx.disarm(TimerId::LockedBlank);
+                None
+            }
+            Event::Activity(ActivityEvent::InputIdle) if !ctx.is_armed(TimerId::LockedBlank) => {
+                arm(ctx);
+                None
+            }
             event if is_input(event) => {
                 arm(ctx);
                 None

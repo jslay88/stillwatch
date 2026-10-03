@@ -18,8 +18,15 @@ use crate::event::{ActivityEvent, ControlCommand, Event, SessionEvent};
 /// while asleep, or a resume without a sleep).
 pub(in crate::state) fn observe(ctx: &mut Ctx, event: &Event) -> bool {
     match event {
-        Event::Activity(ActivityEvent::InputIdle) => ctx.idle = true,
-        Event::Activity(ActivityEvent::InputResumed) => present(ctx, true),
+        Event::Activity(ActivityEvent::InputIdle) => {
+            ctx.mark_activity_known();
+            ctx.idle = true;
+        }
+        Event::Activity(ActivityEvent::InputResumed) => {
+            ctx.mark_activity_known();
+            present(ctx, true);
+        }
+        Event::Activity(ActivityEvent::Unknown) => ctx.lost_compositor(),
         Event::Activity(ActivityEvent::GamepadActivity { .. }) => {
             if !ctx.config.activity.gamepad {
                 return false;
@@ -45,7 +52,10 @@ pub(in crate::state) fn observe(ctx: &mut Ctx, event: &Event) -> bool {
             return true;
         }
         Event::Media { playing } => ctx.playing.clone_from(playing),
-        Event::OutputsChanged(outputs) => ctx.detector.set_outputs(outputs),
+        Event::OutputsChanged(outputs) => {
+            ctx.detector.set_outputs(outputs);
+            ctx.note_outputs(outputs);
+        }
         Event::Timer(id) => ctx.fired(*id),
         _ => {}
     }

@@ -11,9 +11,9 @@
 //! delegate_dispatch!(MyState: [WlOutput: OutputGlobal] => OutputRegistry);
 //! ```
 
-use wayland_client::protocol::wl_output::{self, WlOutput};
+use wayland_client::protocol::wl_output::{self, Mode, Transform, WlOutput};
 use wayland_client::protocol::wl_registry::{self, WlRegistry};
-use wayland_client::{Connection, Dispatch, Proxy as _, QueueHandle};
+use wayland_client::{Connection, Dispatch, Proxy as _, QueueHandle, WEnum};
 
 pub use crate::outputs::NAME_VERSION;
 
@@ -40,6 +40,23 @@ struct Tracked {
     proxy: WlOutput,
     name: Option<String>,
     pending_name: Option<String>,
+    width: u32,
+    height: u32,
+    has_size: bool,
+    rotated: bool,
+}
+
+/// A named output and the size of its current mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamedOutput {
+    /// Registry id of the `wl_output` global.
+    pub global: OutputGlobal,
+    /// Connector name.
+    pub name: String,
+    /// Width in physical pixels, swapped with height when rotated.
+    pub width: u32,
+    /// Height in physical pixels, swapped with width when rotated.
+    pub height: u32,
 }
 
 /// The outputs a connection knows about, with their connector names.
@@ -80,6 +97,10 @@ impl OutputRegistry {
                     proxy: proxy.clone(),
                     name: None,
                     pending_name: None,
+                    width: 0,
+                    height: 0,
+                    has_size: false,
+                    rotated: false,
                 });
                 Some(OutputChange::Added(global, proxy))
             }
@@ -109,6 +130,31 @@ impl OutputRegistry {
         self.outputs.iter().map(|o| (o.global, &o.proxy))
     }
 
+    /// Named outputs that already have a current mode.
+    #[must_use]
+    pub fn named(&self) -> Vec<NamedOutput> {
+        self.outputs
+            .iter()
+            .filter_map(|output| {
+                let name = output.name.clone()?;
+                if !output.has_size || output.width == 0 || output.height == 0 {
+                    return None;
+                }
+                let (width, height) = if output.rotated {
+                    (output.height, output.width)
+                } else {
+                    (output.width, output.height)
+                };
+                Some(NamedOutput {
+                    global: output.global,
+                    name,
+                    width,
+                    height,
+                })
+            })
+            .collect()
+    }
+
     fn handle_output(&mut self, global: OutputGlobal, event: wl_output::Event) {
         let Some(output) = self.outputs.iter_mut().find(|o| o.global == global) else {
             return;
@@ -119,6 +165,27 @@ impl OutputRegistry {
                 if let Some(name) = output.pending_name.take() {
                     output.name = Some(name);
                 }
+            }
+            wl_output::Event::Mode {
+                flags: WEnum::Value(flags),
+                width,
+                height,
+                ..
+            } if flags.contains(Mode::Current) => {
+                if let (Ok(width), Ok(height)) = (u32::try_from(width), u32::try_from(height)) {
+                    output.width = width;
+                    output.height = height;
+                    output.has_size = true;
+                }
+            }
+            wl_output::Event::Geometry {
+                transform: WEnum::Value(transform),
+                ..
+            } => {
+                output.rotated = matches!(
+                    transform,
+                    Transform::_90 | Transform::_270 | Transform::Flipped90 | Transform::Flipped270
+                );
             }
             _ => {}
         }

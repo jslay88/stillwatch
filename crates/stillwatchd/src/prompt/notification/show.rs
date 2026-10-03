@@ -44,6 +44,9 @@ impl Prompt<'_> {
         let guard = self.open.track(proxy.clone(), id);
         let mut updates = interval_at(Instant::now() + self.tick, self.tick);
         let mut counting = true;
+        let conn = proxy.inner().connection().clone();
+        let vanished = crate::peer::until_replaced(&conn, "org.freedesktop.Notifications");
+        tokio::pin!(vanished);
         loop {
             tokio::select! {
                 signal = invoked.next() => {
@@ -77,6 +80,12 @@ impl Prompt<'_> {
                         proxy::close(proxy, id).await;
                         return Ok(PromptOutcome::Dismissed);
                     }
+                }
+                result = &mut vanished => {
+                    result?;
+                    return Err(BackendError::Disconnected(
+                        "notification server vanished".into(),
+                    ));
                 }
             }
         }

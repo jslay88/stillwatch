@@ -5,10 +5,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use stillwatch_core::backend::{BackendError, EventSink, IdleSource};
+use stillwatch_core::backoff::{Backoff, BackoffPolicy};
 use stillwatch_core::event::{ActivityEvent, Event};
+use stillwatch_core::time::SystemClock;
 use stillwatch_testkit::kwin::{Kwin, KwinOptions};
-use stillwatchd::idle::WaylandIdleSource;
-use tokio::sync::mpsc;
+use stillwatchd::idle::{self, WaylandIdleSource};
+use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, timeout};
 
 fn channel_sink() -> (Arc<dyn EventSink>, mpsc::UnboundedReceiver<Event>) {
@@ -90,4 +92,41 @@ async fn losing_kwin_is_a_transient_error() {
     assert!(error.is_transient(), "{error}");
     let reconnect = source.watch(Duration::from_secs(600), channel_sink().0);
     assert!(reconnect.await.unwrap_err().is_transient());
+}
+
+#[tokio::test]
+async fn reconnects_after_kwin_restarts() {
+    let Some(mut kwin) = Kwin::start(KwinOptions::default()).await.unwrap() else {
+        return;
+    };
+    let source = source(&kwin);
+    let (_timeout, timeout_rx) = watch::channel(Duration::from_secs(1));
+    let (sink, mut rx) = channel_sink();
+    let backoff = Backoff::new(BackoffPolicy {
+        initial: Duration::from_millis(50),
+        max: Duration::from_secs(2),
+        multiplier: 2,
+        reset_after: Duration::from_secs(30),
+    });
+    let task =
+        tokio::spawn(
+            async move { idle::run(&source, timeout_rx, sink, backoff, &SystemClock).await },
+        );
+    let first = timeout(Duration::from_secs(20), rx.recv()).await.unwrap();
+    assert_eq!(first, Some(ActivityEvent::InputIdle.into()));
+    kwin.restart().await.unwrap();
+    let again = timeout(Duration::from_secs(30), async {
+        loop {
+            match rx.recv().await {
+                Some(event) if event == ActivityEvent::InputIdle.into() => return true,
+                None => return false,
+                Some(_) => {}
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert!(again, "idle source did not reconnect");
+    assert!(!task.is_finished());
+    task.abort();
 }

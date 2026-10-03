@@ -66,12 +66,18 @@ impl Sources {
     }
 }
 
-/// Watches `sources` until either bus connection is lost.
+/// Why [`run`] returned without a bus error.
+pub(crate) enum End {
+    /// logind or the screensaver name changed owner. Open the proxies again.
+    Resubscribe,
+}
+
+/// Watches `sources` until either bus connection is lost or a peer restarts.
 pub(crate) async fn run(
     sources: &Sources,
     tracker: &Mutex<Tracker>,
     sink: &dyn EventSink,
-) -> Result<(), BackendError> {
+) -> Result<End, BackendError> {
     // Subscribe before reading, so a change in between arrives as a signal
     // instead of being missed.
     let mut sleeps = sources
@@ -106,6 +112,14 @@ pub(crate) async fn run(
     for event in watching.update(|tracker| tracker.start(snapshot)) {
         sink.send(event.into());
     }
+    let mut login_owner = std::pin::pin!(crate::peer::until_replaced(
+        &sources.system,
+        logind::SERVICE
+    ));
+    let mut saver_owner = std::pin::pin!(crate::peer::until_replaced(
+        &sources.session,
+        screensaver::SERVICE
+    ));
     loop {
         let event = tokio::select! {
             signal = sleeps.next() => {
@@ -133,6 +147,14 @@ pub(crate) async fn run(
             },
             () = sources.system.closed() => return Err(closed("system")),
             () = sources.session.closed() => return Err(closed("session")),
+            result = &mut login_owner => {
+                result?;
+                return Ok(End::Resubscribe);
+            }
+            result = &mut saver_owner => {
+                result?;
+                return Ok(End::Resubscribe);
+            }
         };
         if let Some(event) = event {
             tracing::debug!(?event, "session event");

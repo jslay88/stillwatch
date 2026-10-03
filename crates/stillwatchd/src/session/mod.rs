@@ -140,10 +140,13 @@ impl Default for DbusSessionMonitor {
 impl SessionMonitor for DbusSessionMonitor {
     fn watch(&self, sink: Arc<dyn EventSink>) -> BackendFuture<'_, ()> {
         Box::pin(async move {
-            let system = dbus::connect(&self.system, CALL_TIMEOUT).await?;
-            let session = dbus::connect(&self.session, CALL_TIMEOUT).await?;
-            let sources = watch::Sources::open(&system, &session, &self.lookup).await?;
-            watch::run(&sources, &self.tracker, sink.as_ref()).await
+            loop {
+                let system = dbus::connect(&self.system, CALL_TIMEOUT).await?;
+                let session = dbus::connect(&self.session, CALL_TIMEOUT).await?;
+                let sources = watch::Sources::open(&system, &session, &self.lookup).await?;
+                let watch::End::Resubscribe =
+                    watch::run(&sources, &self.tracker, sink.as_ref()).await?;
+            }
         })
     }
 

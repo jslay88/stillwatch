@@ -23,6 +23,9 @@ pub enum ActivityEvent {
         /// [`GamepadDevice::id`](crate::backend::GamepadDevice::id) of the device.
         device: String,
     },
+    /// The compositor idle watch is down. This is not idle and not input:
+    /// the machine must not blank, and must not treat it as a wake.
+    Unknown,
 }
 
 /// Session lock and suspend notifications.

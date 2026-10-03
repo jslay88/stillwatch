@@ -7,7 +7,7 @@ use zbus::proxy::CacheProperties;
 
 use crate::dbus::call_error;
 
-const SERVICE: &str = "org.freedesktop.ScreenSaver";
+pub(crate) const SERVICE: &str = "org.freedesktop.ScreenSaver";
 
 #[zbus::proxy(
     interface = "org.freedesktop.ScreenSaver",

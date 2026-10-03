@@ -86,6 +86,8 @@ fn every_kind_has_a_label() {
         (HistoryKind::PromptAnswered, "prompt answered"),
         (HistoryKind::ConfigReloadFailed, "reload failed"),
         (HistoryKind::Migration, "config migrated"),
+        (HistoryKind::Reconnect, "reconnect"),
+        (HistoryKind::Hotplug, "hotplug"),
     ];
     for (kind, label) in kinds {
         assert_eq!(event(kind), label);
@@ -123,6 +125,12 @@ fn details_cover_every_optional_field() {
     let auto = HistoryEntry::new(at(0), HistoryKind::Prompt)
         .with_prompt(PromptMedium::Notification, PromptReason::Auto);
     assert_eq!(details(&auto), ["notification", "auto"]);
+    let reconnect = HistoryEntry::new(at(0), HistoryKind::Reconnect).with_count(2);
+    assert_eq!(details(&reconnect), ["2"]);
+    let hotplug = HistoryEntry::new(at(0), HistoryKind::Hotplug)
+        .with_output("HDMI-A-1")
+        .with_count(1);
+    assert_eq!(details(&hotplug), ["HDMI-A-1", "1"]);
 }
 
 #[test]

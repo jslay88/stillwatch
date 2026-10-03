@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use super::{Ctx, State, StateHandler, Transition, is_input};
 use crate::command::Command;
-use crate::event::{ControlCommand, Event};
+use crate::event::{ActivityEvent, ControlCommand, Event};
 use crate::history::{HistoryKind, PromptAnswer};
 use crate::prompt::PromptOutcome;
 use crate::time::TimerId;
@@ -59,7 +59,9 @@ impl StateHandler for Handler {
                 record_answer(ctx, PromptOutcome::Timeout);
                 Some(ran_out(ctx))
             }
-            Event::Timer(TimerId::PromptAnswerGrace) => Some(Transition::to(State::Active)),
+            Event::Timer(TimerId::PromptAnswerGrace) | Event::Activity(ActivityEvent::Unknown) => {
+                Some(Transition::to(State::Active))
+            }
             event if is_input(event) => {
                 if !present(ctx) {
                     start_grace(ctx);
@@ -110,7 +112,7 @@ fn present(ctx: &Ctx) -> bool {
 
 /// Where the prompt goes when our countdown runs out.
 fn ran_out(ctx: &Ctx) -> Transition {
-    if present(ctx) {
+    if present(ctx) || !ctx.activity_known() {
         Transition::to(State::Active)
     } else {
         Transition::to(State::Acting)

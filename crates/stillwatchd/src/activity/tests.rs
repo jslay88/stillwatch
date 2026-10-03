@@ -168,9 +168,9 @@ async fn a_reconnected_watch_counts_as_active_until_the_compositor_says_otherwis
         [
             (Duration::ZERO, machine(ActivityEvent::InputIdle)),
             (Duration::ZERO, changed(Presence::Idle)),
-            (reconnect, machine(ActivityEvent::InputResumed)),
+            (Duration::ZERO, machine(ActivityEvent::Unknown)),
             (
-                reconnect,
+                Duration::ZERO,
                 changed(Presence::Active(WakeSource::WatchRestarted))
             ),
             (reconnect, machine(ActivityEvent::InputIdle)),

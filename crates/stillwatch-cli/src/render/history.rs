@@ -72,6 +72,8 @@ const fn event(kind: HistoryKind) -> &'static str {
         HistoryKind::PromptAnswered => "prompt answered",
         HistoryKind::ConfigReloadFailed => "reload failed",
         HistoryKind::Migration => "config migrated",
+        HistoryKind::Reconnect => "reconnect",
+        HistoryKind::Hotplug => "hotplug",
     }
 }
 
@@ -125,6 +127,12 @@ fn details(entry: &HistoryEntry) -> Vec<String> {
     }
     if let (Some(from), Some(to)) = (entry.from_version, entry.to_version) {
         parts.push(format!("v{from} -> v{to}"));
+    }
+    if let Some(output) = &entry.output {
+        parts.push(output.clone());
+    }
+    if let Some(count) = entry.count {
+        parts.push(count.to_string());
     }
     parts
 }

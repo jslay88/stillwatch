@@ -135,7 +135,15 @@ struct Restarting<'a> {
 impl IdleSource for Restarting<'_> {
     fn watch(&self, timeout: Duration, sink: Arc<dyn EventSink>) -> BackendFuture<'_, ()> {
         let _ = self.raw.send(RawActivity::WatchRestarted);
-        self.inner.watch(timeout, sink)
+        let raw = self.raw.clone();
+        let inner = self.inner.watch(timeout, sink);
+        Box::pin(async move {
+            let result = inner.await;
+            if result.is_err() {
+                let _ = raw.send(RawActivity::WatchLost);
+            }
+            result
+        })
     }
 }
 

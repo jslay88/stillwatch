@@ -224,6 +224,21 @@ fn an_early_timer_rearms_for_the_rest() {
 }
 
 #[test]
+fn a_lost_watch_is_unknown_and_not_input() {
+    let mut rig = Rig::new();
+    rig.send(RawActivity::CompositorIdle);
+    assert_eq!(
+        rig.send(RawActivity::WatchLost),
+        vec![
+            ActivityOutput::Machine(ActivityEvent::Unknown),
+            woke(WakeSource::WatchRestarted)
+        ]
+    );
+    assert!(!rig.aggregator.is_idle());
+    assert_eq!(rig.send(RawActivity::WatchRestarted), vec![]);
+}
+
+#[test]
 fn a_restarted_watch_counts_as_active() {
     let mut rig = Rig::new();
     assert_eq!(rig.send(RawActivity::WatchRestarted), vec![]);

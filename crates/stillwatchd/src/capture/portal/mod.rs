@@ -226,6 +226,7 @@ impl PortalCapture {
         generation: u64,
     ) {
         let this = self.clone();
+        let conn = self.shared.conn.clone();
         tokio::spawn(async move {
             let mut closed = match session.receive_closed().await {
                 Ok(closed) => closed,
@@ -234,9 +235,12 @@ impl PortalCapture {
                     return;
                 }
             };
+            let replaced = crate::peer::until_replaced(&conn, "org.freedesktop.portal.Desktop");
+            tokio::pin!(replaced);
             let ended = tokio::select! {
                 _ = close_rx => false,
                 event = closed.next() => event.is_some(),
+                _ = &mut replaced => true,
             };
             if ended && lock(&this.shared.inner).generation == generation {
                 this.fail(BackendError::Disconnected(

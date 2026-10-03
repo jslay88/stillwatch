@@ -225,6 +225,39 @@ async fn closing_without_an_action_opens_the_dialog_for_the_time_left() -> TestR
     Ok(())
 }
 
+#[tokio::test]
+async fn a_vanished_notification_server_opens_the_dialog() -> TestResult {
+    let Some(bus) = PrivateBus::start()? else {
+        eprintln!("skipping: dbus-daemon is not installed");
+        return Ok(());
+    };
+    let server = FakeNotificationServer::spawn(&bus).await?;
+    let harness = Harness::new(bus.address());
+    harness.dialog.answer(PromptOutcome::Cancel);
+    let prompter = Arc::clone(&harness.prompter);
+    let task = tokio::spawn(async move { prompter.show(request()).await });
+    let _sent = wait_for_notification(&server).await?;
+    server.exit().await?;
+    let result = timeout(WAIT, task).await???;
+    assert_eq!(result, PromptOutcome::Cancel);
+    let shown = harness.dialog.requests.snapshot();
+    assert_eq!(shown.len(), 1);
+    assert_eq!(
+        reasons(&harness.history),
+        [
+            (
+                Some(PromptMedium::Notification),
+                Some(PromptReason::Configured)
+            ),
+            (
+                Some(PromptMedium::Dialog),
+                Some(PromptReason::FallbackFailed)
+            ),
+        ]
+    );
+    Ok(())
+}
+
 async fn wait_for_notification(server: &FakeNotificationServer) -> Result<u32, Box<dyn Error>> {
     let poll = async {
         loop {

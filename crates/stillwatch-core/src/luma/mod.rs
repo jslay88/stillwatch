@@ -31,17 +31,29 @@ pub struct OutputInfo {
     pub width: u32,
     /// Height in physical pixels.
     pub height: u32,
+    /// Bumps when the compositor replaces this connector. The same name with
+    /// a new generation is a different output and must not keep old block state.
+    #[serde(default)]
+    pub generation: u64,
 }
 
 impl OutputInfo {
-    /// Creates an output description.
+    /// Creates an output description at generation 0.
     #[must_use]
     pub fn new(name: impl Into<String>, width: u32, height: u32) -> Self {
         Self {
             name: name.into(),
             width,
             height,
+            generation: 0,
         }
+    }
+
+    /// Sets the hotplug generation. A reused connector name gets a new one.
+    #[must_use]
+    pub const fn with_generation(mut self, generation: u64) -> Self {
+        self.generation = generation;
+        self
     }
 }
 
@@ -236,7 +248,12 @@ mod tests {
     fn output_info_serializes_as_plain_fields() {
         let output = OutputInfo::new("HDMI-A-1", 3840, 2160);
         let json = serde_json::to_string(&output).unwrap();
-        assert_eq!(json, r#"{"name":"HDMI-A-1","width":3840,"height":2160}"#);
+        assert_eq!(
+            json,
+            r#"{"name":"HDMI-A-1","width":3840,"height":2160,"generation":0}"#
+        );
         assert_eq!(serde_json::from_str::<OutputInfo>(&json).unwrap(), output);
+        let older = r#"{"name":"HDMI-A-1","width":3840,"height":2160}"#;
+        assert_eq!(serde_json::from_str::<OutputInfo>(older).unwrap(), output);
     }
 }

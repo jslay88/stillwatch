@@ -1,7 +1,8 @@
 //! Decision history entries.
 //!
-//! Entries hold numbers and state names only: no pixels, window titles, or
-//! media metadata. They are stored one JSON object per line.
+//! Entries hold numbers, state names, and output connector names only: no
+//! pixels, window titles, or media metadata. They are stored one JSON object
+//! per line.
 
 use std::time::Duration;
 
@@ -39,6 +40,12 @@ pub enum HistoryKind {
     ConfigReloadFailed,
     /// The loaded config was migrated in memory from an older version.
     Migration,
+    /// The compositor idle watch disconnected. `count` is how many times
+    /// this process has lost it.
+    Reconnect,
+    /// An output was added (`count` 1) or removed (`count` 0). `output` is
+    /// the connector name.
+    Hotplug,
 }
 
 /// Which prompt was actually shown, for [`HistoryKind::Prompt`] entries
@@ -182,6 +189,13 @@ pub struct HistoryEntry {
     /// Config version migrated to, for `Migration` entries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to_version: Option<u32>,
+    /// Connector name, for `Hotplug` entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    /// A count: reconnects so far, or 1 when an output was added and 0 when
+    /// it was removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub count: Option<u32>,
     /// Media, gamepad, and lock state at decision time.
     #[serde(flatten)]
     pub context: DecisionContext,
@@ -206,6 +220,8 @@ impl HistoryEntry {
             error_count: None,
             from_version: None,
             to_version: None,
+            output: None,
+            count: None,
             context: DecisionContext::default(),
         }
     }
@@ -282,6 +298,20 @@ impl HistoryEntry {
     pub const fn with_versions(mut self, from: u32, to: u32) -> Self {
         self.from_version = Some(from);
         self.to_version = Some(to);
+        self
+    }
+
+    /// Attaches a connector name.
+    #[must_use]
+    pub fn with_output(mut self, output: impl Into<String>) -> Self {
+        self.output = Some(output.into());
+        self
+    }
+
+    /// Attaches a count (reconnects, or 1 for an added output and 0 for a removed one).
+    #[must_use]
+    pub const fn with_count(mut self, count: u32) -> Self {
+        self.count = Some(count);
         self
     }
 }
