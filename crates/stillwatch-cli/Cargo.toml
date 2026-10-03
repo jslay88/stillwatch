@@ -16,16 +16,21 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+futures-util.workspace = true
 humantime.workspace = true
 jiff.workspace = true
 stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
 stillwatchd.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+zbus.workspace = true
 
 [dev-dependencies]
 stillwatch-core = { workspace = true, features = ["mocks"] }
+stillwatch-testkit.workspace = true
+stillwatchd = { workspace = true, features = ["fake"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 

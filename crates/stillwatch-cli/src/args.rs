@@ -1,5 +1,6 @@
 //! Command-line arguments for `stillwatch`.
 
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -20,6 +21,10 @@ pub struct Cli {
     /// Log level for this command's own diagnostics (beats `RUST_LOG`)
     #[arg(long, global = true, value_name = "LEVEL", value_parser = PossibleValuesParser::new(LEVELS))]
     pub log_level: Option<String>,
+
+    /// D-Bus address to find the daemon on instead of the session bus
+    #[arg(long, global = true, value_name = "ADDRESS", hide = true)]
+    pub bus_address: Option<String>,
 }
 
 /// Top-level subcommands.
@@ -85,6 +90,14 @@ pub struct ProbeArgs {
     /// Time between captures [default: `stale.check_interval_seconds`]
     #[arg(long, value_name = "DURATION", value_parser = parse_positive)]
     pub interval: Option<Duration>,
+
+    /// Stop after this many samples [default: run until Ctrl-C]
+    #[arg(long, value_name = "N")]
+    pub count: Option<NonZeroUsize>,
+
+    /// Print each sample as a JSON line
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// Arguments for `stillwatch idle-test`.

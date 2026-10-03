@@ -117,16 +117,33 @@ fn history_rejects_invalid_since() {
 fn probe() {
     assert_eq!(
         command(&["probe"]),
-        Command::Probe(ProbeArgs { interval: None })
+        Command::Probe(ProbeArgs {
+            interval: None,
+            count: None,
+            json: false
+        })
     );
     assert_eq!(
-        command(&["probe", "--interval", "10s"]),
+        command(&["probe", "--interval", "10s", "--count", "3", "--json"]),
         Command::Probe(ProbeArgs {
-            interval: Some(Duration::from_secs(10))
+            interval: Some(Duration::from_secs(10)),
+            count: NonZeroUsize::new(3),
+            json: true
         })
     );
     let err = parse(&["probe", "--interval", "0s"]).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    let err = parse(&["probe", "--count", "0"]).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::ValueValidation);
+}
+
+#[test]
+fn bus_address_is_global_and_hidden() {
+    let cli = parse(&["status", "--bus-address", "unix:path=/tmp/bus"]).unwrap();
+    assert_eq!(cli.bus_address.as_deref(), Some("unix:path=/tmp/bus"));
+    assert_eq!(parse(&["status"]).unwrap().bus_address, None);
+    let help = Cli::command().render_help().to_string();
+    assert!(!help.contains("bus-address"), "{help}");
 }
 
 #[test]

@@ -167,10 +167,25 @@ fn default_path_is_the_standard_config_file() {
 fn public_handlers_use_the_given_path() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.toml");
-    init(&ConfigInitArgs {
-        force: false,
-        path: Some(path.clone()),
-    })
+    let mut out = Vec::new();
+    init(
+        &ConfigInitArgs {
+            force: false,
+            path: Some(path.clone()),
+        },
+        &mut out,
+    )
     .unwrap();
-    check(&ConfigCheckArgs { path: Some(path) }).unwrap();
+    check(
+        &ConfigCheckArgs {
+            path: Some(path.clone()),
+        },
+        &mut out,
+    )
+    .unwrap();
+    let shown = path.display();
+    assert_eq!(
+        String::from_utf8(out).unwrap(),
+        format!("wrote {shown}\n{shown}: ok\n")
+    );
 }

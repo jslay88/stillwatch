@@ -1,17 +1,7 @@
-//! Calibration and troubleshooting commands.
+//! Troubleshooting commands that run without the daemon.
 
-use super::{idle_test, unavailable};
-use crate::args::{IdleTestArgs, ProbeArgs};
-
-/// `stillwatch probe`
-///
-/// # Errors
-///
-/// Not implemented yet; always fails.
-pub fn probe(args: &ProbeArgs) -> anyhow::Result<()> {
-    tracing::debug!(?args, "probe");
-    Err(unavailable("probe"))
-}
+use super::idle_test;
+use crate::args::IdleTestArgs;
 
 /// `stillwatch idle-test`
 ///
