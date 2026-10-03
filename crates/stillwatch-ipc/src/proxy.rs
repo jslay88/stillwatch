@@ -7,21 +7,27 @@
 //! | Member | Signature | Notes |
 //! | -- | -- | -- |
 //! | `Status()` | `-> s` | JSON [`StatusPayload`](crate::status::StatusPayload) |
-//! | `Snooze(t seconds)` | | |
+//! | `Snooze(t seconds)` | | checked against the `[prompt]` snooze rules |
 //! | `CancelSnooze()` | | |
 //! | `Pause()` | | |
 //! | `Resume()` | | |
 //! | `Reload()` | `-> (b ok, as errors)` | same result as the `ConfigChanged` signal |
 //! | `History(t since_seconds)` | `-> s` | JSON lines of `HistoryEntry`, newer than `since_seconds` ago; 0 = all |
-//! | `StartProbe(u interval_ms)` | | starts `ProbeSample` signals |
-//! | `StopProbe()` | | |
-//! | `PromptAnswer(s kind, u minutes)` | | see [`crate::prompt`] |
+//! | `StartProbe(u interval_ms)` | | starts `ProbeSample` signals; at least [`MIN_PROBE_INTERVAL_MS`](crate::probe::MIN_PROBE_INTERVAL_MS) |
+//! | `StopProbe()` | | the probe stops once no caller of `StartProbe` is left |
+//! | `PromptAnswer(s kind, u minutes)` | | see [`crate::prompt`]; snoozes follow the same rules as `Snooze` |
 //! | `Outputs()` | `-> as` | connected output names |
 //! | `Gamepads()` | `-> s` | JSON array of [`GamepadInfo`](crate::gamepad::GamepadInfo) |
 //! | `Players()` | `-> as` | MPRIS player names |
 //! | signal `StateChanged(s state)` | | `State::as_str` name |
 //! | signal `ConfigChanged(b ok, as errors)` | | after every reload attempt |
 //! | signal `ProbeSample(s json)` | | JSON [`ProbeSample`](crate::probe::ProbeSample) |
+//!
+//! A rejected argument (a snooze outside the rules, an unknown prompt answer,
+//! a too short probe interval) fails with
+//! `org.freedesktop.DBus.Error.InvalidArgs`; anything that goes wrong inside
+//! the daemon fails with `org.freedesktop.DBus.Error.Failed`. Both carry a
+//! message meant for the user.
 
 // zbus generates signal argument structs and accessors without doc comments.
 #![allow(missing_docs)]

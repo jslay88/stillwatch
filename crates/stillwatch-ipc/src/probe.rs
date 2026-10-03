@@ -6,6 +6,9 @@ use stillwatch_core::stats::{BlockCounts, BlockState, OutputStats, Threshold};
 
 use crate::error::IpcError;
 
+/// The shortest `StartProbe` interval the daemon accepts, in milliseconds.
+pub const MIN_PROBE_INTERVAL_MS: u32 = 100;
+
 /// One output's probe result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProbeOutput {
