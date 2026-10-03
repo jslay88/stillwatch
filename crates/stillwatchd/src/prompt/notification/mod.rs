@@ -31,13 +31,10 @@ use stillwatch_core::backend::{BackendError, BackendFuture, Prompter};
 use stillwatch_core::config::PromptUrgency;
 use stillwatch_core::prompt::{PromptOutcome, PromptRequest, Reminder};
 
-pub(crate) use self::actions::{outcome as action_outcome, prompt_actions};
-pub(crate) use self::message::APP_ID;
 use self::message::Message;
 use self::open::OpenSlot;
 use self::proxy::{NotificationsProxy, unavailable};
 use self::show::Prompt;
-pub(crate) use self::text::{prompt_body, prompt_summary};
 use crate::dbus::{self, Bus};
 
 /// A server that doesn't answer within this long counts as missing, so the

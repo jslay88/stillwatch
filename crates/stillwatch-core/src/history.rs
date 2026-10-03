@@ -55,7 +55,7 @@ pub enum HistoryKind {
 pub enum PromptMedium {
     /// Desktop notification.
     Notification,
-    /// Dialog (interim `kdialog`, or the GUI dialog later).
+    /// Dialog (`stillwatch-gui prompt`).
     Dialog,
 }
 

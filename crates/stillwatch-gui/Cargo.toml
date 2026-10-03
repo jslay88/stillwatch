@@ -13,6 +13,7 @@ publish.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 futures-util.workspace = true
+humantime.workspace = true
 iced.workspace = true
 ksni.workspace = true
 stillwatch-core.workspace = true

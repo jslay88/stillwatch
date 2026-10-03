@@ -410,7 +410,6 @@ ExecReload=/usr/bin/kill -HUP $MAINPID
             "cargo build --release --offline --locked",
             "depends=(kscreen dbus pipewire xdg-desktop-portal)",
             "ddcutil:",
-            "kdialog:",
             "/usr/bin/stillwatchd",
             "/usr/lib/systemd/user/stillwatch.service",
             "io.github.jslay88.Stillwatch.Daemon.desktop",

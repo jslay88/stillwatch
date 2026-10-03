@@ -19,7 +19,7 @@ KDE Plasma on KWin is the desktop this is built for. Other Wayland compositors c
 | Input idle | `ext-idle-notify-v1` v2. A compositor that only has v1 doesn't count. Gamepads are evdev (compositors don't treat them as input). |
 | Capture | `auto`: KWin `org.kde.KWin.ScreenShot2` when it's there, otherwise xdg-desktop-portal ScreenCast over PipeWire. The portal stream only runs while you're away. |
 | Blank | `dpms` (`kscreen-doctor`), `ddc_standby` (MCCS power mode, VCP 0xD6, over DDC/CI), or a black layer-shell overlay. The overlay works on any compositor with layer-shell and keeps the panel on. |
-| Prompt | A notification with snooze actions. `kdialog` is the fallback, and the Custom... duration. |
+| Prompt | A notification with snooze actions. Dialog style, a failed notification, and Custom... open `stillwatch-gui prompt`. |
 | Session | logind lock and sleep, plus `org.freedesktop.ScreenSaver`. |
 | Media | MPRIS `PlaybackStatus` only. |
 
@@ -75,7 +75,7 @@ cd packaging/arch
 makepkg -si
 ```
 
-The package depends on `kscreen`, `dbus`, `pipewire`, and `xdg-desktop-portal`. `ddcutil` is optional: `ddc_standby` talks DDC/CI itself, and it needs the `i2c-dev` module, which is what the `ddcutil` package loads and what you probe the bus with. `kdialog` is optional, for the dialog prompt. The package installs the binaries, the user unit, the desktop files (the ScreenShot2 grant's `Exec=` is `/usr/bin/stillwatchd`), icons, `README.md`, [`docs/config.md`](docs/config.md), the example hooks under `/usr/share/doc/stillwatch/hooks/`, and both license files. It does not enable the unit. After it installs, run the same `systemctl --user` line as above.
+The package depends on `kscreen`, `dbus`, `pipewire`, and `xdg-desktop-portal`. `ddcutil` is optional: `ddc_standby` talks DDC/CI itself, and it needs the `i2c-dev` module, which is what the `ddcutil` package loads and what you probe the bus with. The package installs the binaries, the user unit, the desktop files (the ScreenShot2 grant's `Exec=` is `/usr/bin/stillwatchd`), icons, `README.md`, [`docs/config.md`](docs/config.md), the example hooks under `/usr/share/doc/stillwatch/hooks/`, and both license files. It does not enable the unit. After it installs, run the same `systemctl --user` line as above.
 
 ## First run
 
@@ -183,14 +183,14 @@ stillwatch config check [PATH]
 
 stillwatch-gui                  # tray; open the window from the menu
 stillwatch-gui settings          # tray, and the settings window immediately
-stillwatch-gui prompt            # tray, and the prompt placeholder
+stillwatch-gui prompt [--remaining SECS] [--custom]
 ```
 
 `stillwatch <command> --help` has details. Durations use [humantime](https://docs.rs/humantime) syntax (`90s`, `45m`, `1h 30m`).
 
 Everything except `idle-test`, `config`, and `probe --standalone` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
 
-`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. Settings is the schema-driven form. Calibration is the heatmap. History, Service, and `prompt` are still placeholders.
+`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. Settings is the schema-driven form. Calibration is the heatmap. History and Service are still placeholders. `stillwatch-gui prompt` is the countdown dialog (presets, a custom duration, Blank now, and Cancel). It answers over D-Bus and exits.
 
 - **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
 - **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.

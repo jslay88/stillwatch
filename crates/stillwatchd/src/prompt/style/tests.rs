@@ -442,3 +442,28 @@ async fn dismiss_does_not_fall_back() {
     assert_eq!(result, Ok(PromptOutcome::Dismissed));
     assert_eq!(dialogs.requests.snapshot(), []);
 }
+
+#[tokio::test]
+async fn custom_opens_the_dialog_without_replacing_the_outcome() {
+    let built = Built::new(PromptStyle::Notification, false, false);
+    built
+        .parts
+        .notifications
+        .push_outcome(PromptOutcome::CustomRequested);
+    built.parts.dialogs.push(PromptOutcome::Cancel);
+    let mut ask = request(45);
+    ask.allow_custom = true;
+    let result = built.parts.prompter.show(ask).await;
+    assert_eq!(result, Ok(PromptOutcome::CustomRequested));
+    let mut seen = Vec::new();
+    for _ in 0..20 {
+        seen = built.parts.dialogs.requests.snapshot();
+        if !seen.is_empty() {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].countdown, Duration::from_secs(45));
+    assert!(seen[0].allow_custom);
+}

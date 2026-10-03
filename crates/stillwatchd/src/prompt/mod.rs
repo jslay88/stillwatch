@@ -13,7 +13,7 @@ mod style;
 
 pub mod notification;
 
-pub use dialog::{DialogLauncher, KdialogLauncher};
+pub use dialog::{DialogLauncher, GuiLauncher};
 pub use fullscreen::{FullscreenMonitor, UnverifiedFullscreen};
 pub use notification::NotificationPrompter;
 pub use select::NOTIFICATIONS_HIDDEN_OVER_FULLSCREEN;

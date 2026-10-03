@@ -25,7 +25,23 @@ fn no_subcommand_is_the_tray() {
 fn settings_and_prompt_open_those_windows() {
     assert_eq!(parse(&["settings"]).command, Some(Command::Settings));
     assert_eq!(parse(&["settings"]).launch_mode(), LaunchMode::Settings);
+    assert_eq!(
+        parse(&["prompt"]).command,
+        Some(Command::Prompt {
+            remaining: None,
+            custom: false,
+        })
+    );
     assert_eq!(parse(&["prompt"]).launch_mode(), LaunchMode::Prompt);
+    let custom = parse(&["prompt", "--remaining", "12", "--custom"]);
+    assert_eq!(
+        custom.command,
+        Some(Command::Prompt {
+            remaining: Some(12),
+            custom: true,
+        })
+    );
+    assert_eq!(custom.launch_mode(), LaunchMode::Prompt);
 }
 
 #[test]
