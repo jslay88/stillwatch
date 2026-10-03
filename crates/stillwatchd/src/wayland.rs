@@ -4,6 +4,7 @@
 mod connect;
 pub mod outputs;
 mod roundtrip;
+mod socket_state;
 #[cfg(test)]
 pub mod test_server;
 
@@ -84,17 +85,41 @@ impl<S: 'static> EventPump<S> {
     /// [`BackendError::Disconnected`] when the socket fails or closes,
     /// [`BackendError::Protocol`] on a protocol error.
     pub async fn turn(&mut self, state: &mut S) -> Result<(), BackendError> {
-        self.queue.dispatch_pending(state).map_err(dispatch_error)?;
+        // `read` only queues events. Deliver them and return so the caller
+        // can react before the next wait, or a withdrawn global sits behind it.
+        let dispatched = self.queue.dispatch_pending(state).map_err(dispatch_error)?;
         match self.queue.flush() {
             Err(error) if !is_would_block(&error) => return Err(wayland_error(error)),
             _ => {}
         }
+        if dispatched > 0 {
+            return Ok(());
+        }
+        // Pending events have to be dispatched before another read can be
+        // prepared. Yield so a backend that never clears them can't pin the
+        // runtime (the idle reconnect test shares one thread with its timeout).
         let Some(read) = self.queue.prepare_read() else {
+            tokio::task::yield_now().await;
             return Ok(());
         };
         let mut ready = self.socket.readable().await?;
+        // Captured before the read consumes the bytes. libwayland's protocol
+        // error carries no message of its own.
+        let error_text = socket_state::protocol_text(self.socket.as_fd());
         match read.read() {
-            Ok(_) => Ok(()),
+            Ok(_) => match socket_state::after_read(self.socket.as_fd()) {
+                // libwayland reports EAGAIN as success, which leaves the
+                // reactor marked readable and spins the runtime.
+                socket_state::AfterRead::Idle => {
+                    ready.clear_ready();
+                    Ok(())
+                }
+                socket_state::AfterRead::Closed => {
+                    let _ = self.queue.dispatch_pending(state);
+                    Err(connection_closed())
+                }
+                socket_state::AfterRead::Pending => Ok(()),
+            },
             Err(error) if is_would_block(&error) => {
                 ready.clear_ready();
                 Ok(())
@@ -103,7 +128,10 @@ impl<S: 'static> EventPump<S> {
                 // A read that hits EOF may already have queued the compositor's
                 // last events; deliver them before reporting the loss.
                 let _ = self.queue.dispatch_pending(state);
-                Err(wayland_error(error))
+                Err(with_server_text(
+                    wayland_error(error),
+                    error_text.as_deref(),
+                ))
             }
         }
     }
@@ -153,6 +181,23 @@ pub fn connect_error(error: &ConnectError) -> BackendError {
             BackendError::Disconnected(format!("can't reach the Wayland compositor: {error}"))
         }
         _ => BackendError::Unavailable(format!("can't connect to Wayland: {error}")),
+    }
+}
+
+fn connection_closed() -> BackendError {
+    BackendError::Disconnected("Wayland connection lost: connection closed".into())
+}
+
+/// Keeps the compositor's wording when the Wayland stack omitted it.
+fn with_server_text(error: BackendError, text: Option<&str>) -> BackendError {
+    let Some(text) = text.filter(|text| !text.is_empty()) else {
+        return error;
+    };
+    match error {
+        BackendError::Protocol(message) if !message.contains(text) => {
+            BackendError::Protocol(format!("{message}: {text}"))
+        }
+        other => other,
     }
 }
 
@@ -208,6 +253,29 @@ mod tests {
         assert!(
             matches!(&mapped, BackendError::Protocol(m) if m.contains("bad seat")),
             "{mapped}"
+        );
+    }
+
+    #[test]
+    fn an_empty_protocol_message_keeps_the_server_text() {
+        let protocol = WaylandError::Protocol(ProtocolError {
+            code: 0,
+            object_id: 5,
+            object_interface: "ext_idle_notification_v1".into(),
+            message: String::new(),
+        });
+        let mapped = with_server_text(wayland_error(protocol), Some("idled twice"));
+        assert!(
+            matches!(&mapped, BackendError::Protocol(m) if m.contains("idled twice")),
+            "{mapped}"
+        );
+        let kept = with_server_text(
+            BackendError::Protocol("already says idled twice".into()),
+            Some("idled twice"),
+        );
+        assert_eq!(
+            kept,
+            BackendError::Protocol("already says idled twice".into())
         );
     }
 
