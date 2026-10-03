@@ -12,16 +12,21 @@ publish.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+evdev.workspace = true
+futures-util.workspace = true
 stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
 tokio.workspace = true
+tokio-udev.workspace = true
 tracing.workspace = true
 wayland-client.workspace = true
 wayland-protocols.workspace = true
 
 [dev-dependencies]
+proptest.workspace = true
 stillwatch-core = { workspace = true, features = ["mocks"] }
 tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
