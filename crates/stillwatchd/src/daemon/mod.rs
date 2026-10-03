@@ -21,6 +21,7 @@ mod exec;
 mod handle;
 mod inbox;
 mod parts;
+mod platform;
 mod probe_loop;
 mod reload;
 mod shared;

@@ -9,6 +9,7 @@ use stillwatch_core::activity::ActivitySettings;
 use stillwatch_core::backend::{
     BackendError, Blanker, GamepadSource, IdleSource, MediaWatcher, Prompter, SessionMonitor,
 };
+use stillwatch_core::command::BlankMethod;
 use stillwatch_core::config::LoadOutcome;
 use stillwatch_core::event::{Event, SessionEvent};
 use stillwatch_core::state::StateMachine;
@@ -83,6 +84,12 @@ pub(super) struct Engine<R> {
     pub(super) jobs: Vec<JoinHandle<()>>,
     pub(super) activity_job: Option<JoinHandle<()>>,
     pub(super) probe_task: Option<JoinHandle<()>>,
+    /// Blank method that replaces the configured one.
+    pub(super) blank_override: Option<BlankMethod>,
+    /// Last platform probe. `None` in tests, so a reload doesn't touch the session.
+    pub(super) probe: Option<crate::platform::Probe>,
+    /// Backend names already logged and recorded.
+    pub(super) selected_names: String,
 }
 
 impl<R: ReloadSignal> Engine<R> {
@@ -134,6 +141,9 @@ impl<R: ReloadSignal> Engine<R> {
             jobs: Vec::new(),
             activity_job: None,
             probe_task: None,
+            blank_override: built.blank_override,
+            probe: built.probe,
+            selected_names: built.selected_names,
         }
     }
 
@@ -240,6 +250,8 @@ impl<R: ReloadSignal> Engine<R> {
         if matches!(self.hotplug, Hotplug::On) {
             self.jobs
                 .push(spawn_hotplug(Arc::clone(&self.clock), self.out.clone()));
+            self.jobs
+                .push(super::spawn::spawn_platform_watch(self.out.clone()));
         }
         if let Some(job) = spawn_config_watcher(self.reloader.path(), self.out.clone()) {
             self.jobs.push(job);
@@ -287,6 +299,7 @@ impl<R: ReloadSignal> Engine<R> {
             }
             Incoming::Probe(interval, tx) => self.spawn_probe(interval, tx),
             Incoming::Tick => {}
+            Incoming::Reprobe => self.on_reprobe().await,
         }
     }
 
@@ -357,6 +370,7 @@ impl<R: ReloadSignal> Engine<R> {
         DaemonStatus {
             snapshot: self.machine.status(now),
             capture_backend: lock(&self.shared.capture_backend).clone(),
+            backends: lock(&self.shared.backends).clone(),
             config_errors: lock(&self.shared.errors).clone(),
             panel_care: None,
         }

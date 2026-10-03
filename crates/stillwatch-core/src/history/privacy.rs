@@ -36,6 +36,7 @@ const ALLOWED: &[&str] = &[
     "from_version",
     "to_version",
     "count",
+    "backends",
     "media_playing",
     "gamepad_active",
     "locked",
@@ -64,6 +65,7 @@ fn every_kind() -> Vec<HistoryKind> {
         HistoryKind::Migration,
         HistoryKind::Reconnect,
         HistoryKind::Hotplug,
+        HistoryKind::Backends,
     ];
     for kind in kinds {
         match kind {
@@ -79,7 +81,8 @@ fn every_kind() -> Vec<HistoryKind> {
             | HistoryKind::ConfigReloadFailed
             | HistoryKind::Migration
             | HistoryKind::Reconnect
-            | HistoryKind::Hotplug => {}
+            | HistoryKind::Hotplug
+            | HistoryKind::Backends => {}
         }
     }
     kinds.to_vec()
@@ -112,6 +115,7 @@ fn full_entry(kind: HistoryKind) -> HistoryEntry {
     .with_versions(1, 2)
     .with_output("HDMI-A-1")
     .with_count(1)
+    .with_backends("kwin")
     .with_context(DecisionContext {
         media_playing: true,
         gamepad_active: true,
@@ -169,6 +173,7 @@ fn strings_are_only_names_and_timestamps() {
             "HDMI-A-1",
             "HDMI-A-1",
             "configured",
+            "kwin",
             "media",
             "monitoring",
             "notification",

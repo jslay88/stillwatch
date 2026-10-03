@@ -153,6 +153,22 @@ pub(super) fn spawn_hotplug(
     })
 }
 
+/// Wakes the loop when the compositor drops or a backend bus name changes.
+pub(super) fn spawn_platform_watch(out: mpsc::UnboundedSender<Incoming>) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        loop {
+            if let Err(error) = Box::pin(crate::platform::until_change()).await {
+                tracing::debug!(%error, "platform watch is waiting for the session");
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue;
+            }
+            if out.send(Incoming::Reprobe).is_err() {
+                break;
+            }
+        }
+    })
+}
+
 /// Config directory watcher. A failed start is logged; SIGHUP and `Reload()`
 /// still work. The yielded trigger is always a file-changed reload.
 pub(super) fn spawn_config_watcher(

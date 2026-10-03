@@ -78,6 +78,9 @@ pub(crate) fn detail_lines(entry: &HistoryEntry) -> Vec<String> {
     if let Some(line) = prompt_line(entry) {
         lines.push(line);
     }
+    if let Some(backends) = &entry.backends {
+        lines.push(format!("Backends: {backends}"));
+    }
     lines
 }
 

@@ -15,8 +15,8 @@ use zbus::proxy::CacheProperties;
 /// News from the daemon while the dialog is up.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Wake {
-    /// A `Status()` payload.
-    Status(StatusPayload),
+    /// A `Status()` payload. Boxed so the message enum stays small.
+    Status(Box<StatusPayload>),
     /// `StateChanged`.
     State(State),
     /// The bus or the daemon couldn't be used.
@@ -49,7 +49,7 @@ fn stream(
         if let Ok(json) = proxy.status().await {
             match from_json::<StatusPayload>(&json) {
                 Ok(status) => {
-                    let _ = output.send(Wake::Status(status)).await;
+                    let _ = output.send(Wake::Status(Box::new(status))).await;
                 }
                 Err(_) => {
                     tracing::warn!("ignoring a status payload this build doesn't understand");

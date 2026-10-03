@@ -20,6 +20,7 @@ pub mod outputs;
 pub mod overlay;
 pub mod panel;
 mod peer;
+pub mod platform;
 pub mod probe;
 pub mod process;
 pub mod prompt;

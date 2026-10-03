@@ -88,6 +88,7 @@ fn every_kind_has_a_label() {
         (HistoryKind::Migration, "config migrated"),
         (HistoryKind::Reconnect, "reconnect"),
         (HistoryKind::Hotplug, "hotplug"),
+        (HistoryKind::Backends, "backends"),
     ];
     for (kind, label) in kinds {
         assert_eq!(event(kind), label);

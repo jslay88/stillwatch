@@ -78,6 +78,8 @@ pub struct DaemonStatus {
     /// The active capture backend (`kwin`, `portal`), or `None` in
     /// input-idle-only mode.
     pub capture_backend: Option<String>,
+    /// Selected backends and why.
+    pub backends: Option<stillwatch_ipc::status::BackendReport>,
     /// Errors from the last failed reload; empty when the config is good.
     pub config_errors: Vec<String>,
     /// Panel care tracking, when enabled.
@@ -91,6 +93,7 @@ impl DaemonStatus {
         Self {
             snapshot,
             capture_backend: None,
+            backends: None,
             config_errors: Vec::new(),
             panel_care: None,
         }
@@ -109,6 +112,7 @@ impl DaemonStatus {
     pub fn into_payload(self) -> StatusPayload {
         StatusPayload {
             capture_backend: self.capture_backend,
+            backends: self.backends,
             config_errors: self.config_errors,
             panel_care: self.panel_care,
             ..StatusPayload::from_snapshot(&self.snapshot)

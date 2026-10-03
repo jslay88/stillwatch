@@ -17,13 +17,13 @@ KDE Plasma on KWin is the desktop this is built for. Other Wayland compositors c
 | Piece | What it uses |
 | -- | -- |
 | Input idle | `ext-idle-notify-v1` v2. A compositor that only has v1 doesn't count. Gamepads are evdev (compositors don't treat them as input). |
-| Capture | `auto`: KWin `org.kde.KWin.ScreenShot2` when it's there, otherwise xdg-desktop-portal ScreenCast over PipeWire. The portal stream only runs while you're away. |
+| Capture | `auto`: KWin `org.kde.KWin.ScreenShot2` when it's present and this process is authorized, otherwise xdg-desktop-portal ScreenCast over PipeWire, otherwise input idle only. The portal stream only runs while you're away. `kwin` and `portal` force that backend and fail if it isn't there. |
 | Blank | `dpms` (`kscreen-doctor`), `ddc_standby` (MCCS power mode, VCP 0xD6, over DDC/CI), or a black layer-shell overlay. The overlay works on any compositor with layer-shell and keeps the panel on. |
 | Prompt | A notification with snooze actions. Dialog style, a failed notification, and Custom... open `stillwatch-gui prompt`. |
 | Session | logind lock and sleep, plus `org.freedesktop.ScreenSaver`. |
 | Media | MPRIS `PlaybackStatus` only. |
 
-If capture isn't available, the daemon keeps running on input idle alone.
+If capture isn't available, the daemon keeps running on input idle alone. Startup logs the chosen idle, capture, blank, and prompt backends on one line, and `stillwatch status` prints the same choice and why. A configured blank method that isn't available (no `kscreen-doctor` and KWin DPMS, no layer-shell, or no i2c) falls back to the overlay when layer-shell is there.
 
 ## Install
 
@@ -192,7 +192,7 @@ Everything except `idle-test`, `config`, and `probe --standalone` talks to `stil
 
 `stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. Settings is the schema-driven form. Calibration is the heatmap. History lists past decisions (from the daemon, or from `history.jsonl` when it is down) with a 1h, 6h, 24h, or all filter, a kind filter, and the detail behind each entry. Service shows whether `stillwatch.service` is running and enabled, starts, stops, and restarts it, and toggles login and tray autostart. When the unit is failed it shows the last 50 journal lines and a button that opens the full log. It also shows panel care: screen-on time, last standby, and overlay uses. `stillwatch-gui prompt` is the countdown dialog (presets, a custom duration, Blank now, and Cancel). It answers over D-Bus and exits.
 
-- **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
+- **`status`**: state and time in it, snooze time left, idle/locked/media, the selected idle, capture, blank, and prompt backends (and why), the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
 - **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.
 - **`cancel-snooze`**, **`pause`**, **`resume`**: what they say.
 - **`reload`**: makes the daemon reload its config file and prints the result. If the new config is invalid, the problems are printed one per line, the daemon keeps the last good config, and the exit code is 1.

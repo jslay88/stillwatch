@@ -116,7 +116,7 @@ How the screen is read. Frames are downscaled to a luma grid and dropped right a
 - Type: choice
 - Default: `"auto"`
 - Values:
-  - `auto`: KWin ScreenShot2 when it's available, otherwise the portal.
+  - `auto`: KWin ScreenShot2 when it's present and authorized, otherwise the portal, otherwise input idle only.
   - `kwin`: KDE's screenshot interface. No screen sharing indicator.
   - `portal`: xdg-desktop-portal ScreenCast. Works on any desktop. The stream only runs while you're away.
 - Resets detection

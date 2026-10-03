@@ -102,3 +102,27 @@ fn singular_counts_and_never_standby() {
     assert!(text.contains("screen on 1m, last standby never, overlay used 1 time\n"));
     assert!(text.contains("the last reload failed (1 problem);"));
 }
+
+#[test]
+fn selected_backends_include_why() {
+    use stillwatch_ipc::status::BackendReport;
+
+    let status = StatusPayload {
+        capture_backend: Some("kwin".into()),
+        backends: Some(BackendReport {
+            idle: "ext-idle-notify v2".into(),
+            capture: "kwin".into(),
+            capture_reason: "KWin ScreenShot2 is present and authorized".into(),
+            blank: "overlay".into(),
+            blank_reason: "dpms isn't available; using overlay".into(),
+            prompt: "notification".into(),
+            prompt_reason: "auto".into(),
+        }),
+        ..StatusPayload::new(State::Active)
+    };
+    let text = render(&status, &plain());
+    assert!(text.contains("idle source ext-idle-notify v2\n"), "{text}");
+    assert!(text.contains("capture     kwin (KWin ScreenShot2 is present and authorized)\n"));
+    assert!(text.contains("blank       overlay (dpms isn't available; using overlay)\n"));
+    assert!(text.contains("prompt      notification (auto)\n"));
+}
