@@ -2,7 +2,8 @@
 //!
 //! [`PrivateBus`] runs a throwaway `dbus-daemon` per test so backends talk to
 //! a real bus without touching the user's session. Fake services that sit on
-//! that bus (such as [`mpris::FakePlayer`]) live in submodules here so every
+//! that bus (such as [`mpris::FakePlayer`] and
+//! [`notifications::FakeNotificationServer`]) live in submodules here so every
 //! backend's integration tests share them instead of copying.
 //!
 //! When `dbus-daemon` isn't installed, [`PrivateBus::start`] returns
@@ -13,6 +14,8 @@
 mod bus;
 mod error;
 pub mod mpris;
+pub mod notifications;
+mod sync;
 
 pub use bus::{PrivateBus, REQUIRE_ENV};
 pub use error::Error;

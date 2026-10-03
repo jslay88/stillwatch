@@ -1,5 +1,7 @@
 use std::io::{BufRead, BufReader, ErrorKind};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use zbus::Connection;
 use zbus::connection::Builder;
@@ -11,7 +13,26 @@ pub const REQUIRE_ENV: &str = "STILLWATCH_REQUIRE_DBUS";
 
 const DAEMON: &str = "dbus-daemon";
 
-/// A private `dbus-daemon --session`, killed when dropped.
+/// The stock session bus config minus `<standard_session_servicedirs/>`, so a
+/// call to a missing name fails right away instead of D-Bus activating
+/// whatever the machine has installed for it.
+const CONFIG: &str = r#"<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <keep_umask/>
+  <listen>unix:tmpdir=/tmp</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+"#;
+
+/// A private session `dbus-daemon` with no activatable services, killed when
+/// dropped.
 #[derive(Debug)]
 pub struct PrivateBus {
     child: Child,
@@ -36,8 +57,10 @@ impl PrivateBus {
     }
 
     fn start_program(program: &str, required: bool) -> Result<Option<Self>, Error> {
+        let config = ConfigFile::write()?;
         let spawned = Command::new(program)
-            .args(["--session", "--nofork", "--print-address"])
+            .arg(format!("--config-file={}", config.0.display()))
+            .args(["--nofork", "--print-address"])
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .spawn();
@@ -98,6 +121,30 @@ impl Drop for PrivateBus {
     }
 }
 
+/// The bus config on disk, deleted when dropped. `dbus-daemon` has read it
+/// by the time it prints its address.
+struct ConfigFile(PathBuf);
+
+impl ConfigFile {
+    fn write() -> std::io::Result<Self> {
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+        let name = format!(
+            "stillwatch-testkit-bus-{}-{}.conf",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        );
+        let path = std::env::temp_dir().join(name);
+        std::fs::write(&path, CONFIG)?;
+        Ok(Self(path))
+    }
+}
+
+impl Drop for ConfigFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 fn stop(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
@@ -133,5 +180,19 @@ mod tests {
         assert!(conn.unique_name().is_some());
         bus.stop();
         assert!(bus.connect().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn missing_names_are_never_activated() {
+        let Some(bus) = PrivateBus::start().unwrap() else {
+            return;
+        };
+        let conn = bus.connect().await.unwrap();
+        let name = "org.freedesktop.Notifications";
+        let err = conn
+            .call_method(Some(name), "/", Some(name), "GetCapabilities", &())
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("ServiceUnknown"), "{err}");
     }
 }
