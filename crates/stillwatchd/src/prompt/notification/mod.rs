@@ -34,7 +34,7 @@ use self::message::Message;
 use self::open::OpenSlot;
 use self::proxy::{NotificationsProxy, unavailable};
 use self::show::Prompt;
-use crate::dbus::Bus;
+use crate::dbus::{self, Bus};
 
 /// A server that doesn't answer within this long counts as missing, so the
 /// fallback isn't held up.
@@ -93,12 +93,7 @@ impl NotificationPrompter {
     }
 
     async fn connect(&self) -> Result<NotificationsProxy<'static>, BackendError> {
-        let conn = self
-            .bus
-            .builder()
-            .map_err(unavailable)?
-            .method_timeout(CALL_TIMEOUT)
-            .build()
+        let conn = dbus::connect(&self.bus, CALL_TIMEOUT)
             .await
             .map_err(unavailable)?;
         NotificationsProxy::new(&conn).await.map_err(unavailable)

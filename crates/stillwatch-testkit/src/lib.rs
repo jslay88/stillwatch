@@ -13,8 +13,11 @@
 
 mod bus;
 mod error;
+pub mod logind;
 pub mod mpris;
 pub mod notifications;
+pub mod screensaver;
+mod signal;
 mod sync;
 
 pub use bus::{PrivateBus, REQUIRE_ENV};

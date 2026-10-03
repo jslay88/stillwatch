@@ -20,8 +20,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use stillwatch_core::backend::{BackendFuture, EventSink, MediaWatcher};
 
-use self::bus::Bus;
 use self::players::PlayerSet;
+use crate::dbus::Bus;
 
 /// A [`MediaWatcher`] backed by MPRIS on D-Bus.
 ///

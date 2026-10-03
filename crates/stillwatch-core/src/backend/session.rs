@@ -8,7 +8,10 @@ pub trait SessionMonitor: Send + Sync {
     /// `PrepareForSleep` / `ResumedFromSleep` around suspend.
     ///
     /// Does not emit the initial lock state; use
-    /// [`is_locked`](Self::is_locked) for that.
+    /// [`is_locked`](Self::is_locked) for that. A `watch` started after an
+    /// earlier one failed may begin with the events that happened in
+    /// between, relative to what the caller already learned from
+    /// `is_locked` or earlier events.
     fn watch(&self, sink: Arc<dyn EventSink>) -> BackendFuture<'_, ()>;
 
     /// Whether the session is locked right now.

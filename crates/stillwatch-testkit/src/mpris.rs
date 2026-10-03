@@ -1,16 +1,13 @@
 //! A fake MPRIS media player.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use zbus::Connection;
 use zbus::connection::Builder;
-use zbus::fdo::Properties;
-use zbus::names::InterfaceName;
-use zbus::object_server::SignalEmitter;
 use zbus::zvariant::Value;
 
+use crate::signal::properties_changed;
 use crate::sync::lock;
 use crate::{Error, PrivateBus};
 
@@ -160,12 +157,14 @@ impl FakePlayer {
         changed: HashMap<&str, Value<'_>>,
         invalidated: &[&str],
     ) -> Result<(), Error> {
-        let emitter = SignalEmitter::new(&self.conn, OBJECT_PATH)?;
-        let interface =
-            InterfaceName::from_static_str(PLAYER_INTERFACE).map_err(zbus::Error::from)?;
-        Properties::properties_changed(&emitter, interface, changed, Cow::Borrowed(invalidated))
-            .await?;
-        Ok(())
+        properties_changed(
+            &self.conn,
+            OBJECT_PATH,
+            PLAYER_INTERFACE,
+            changed,
+            invalidated,
+        )
+        .await
     }
 }
 
