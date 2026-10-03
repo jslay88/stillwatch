@@ -1,7 +1,7 @@
 ---
 description: Crate boundaries, settings schema, and the pixel privacy rule
-globs: crates/**
-alwaysApply: false
+globs:
+alwaysApply: true
 ---
 
 # Architecture
