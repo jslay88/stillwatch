@@ -159,7 +159,7 @@ The per-block persistence detector that decides whether the screen is static. Ea
 
 ### `stale.media_ignore_players`
 
-**Ignored media players.** MPRIS players that don't raise the threshold, such as audio-only players.
+**Ignored media players.** MPRIS players that don't raise the threshold, such as audio-only players. An entry matches a bus-name suffix (`firefox` covers `firefox.instance_1_42`) or the player's Identity, such as `VLC media player`.
 
 - Type: list of MPRIS player names
 - Default: `["spotify"]`

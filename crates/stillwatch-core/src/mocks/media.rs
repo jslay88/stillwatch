@@ -2,14 +2,14 @@ use std::sync::{Arc, Mutex};
 
 use super::ScriptedWatch;
 use super::script::scripted_watch_methods;
-use crate::backend::{BackendFuture, EventSink, MediaWatcher};
+use crate::backend::{BackendFuture, EventSink, MediaPlayer, MediaWatcher};
 use crate::sync::lock;
 
 /// A [`MediaWatcher`] with scripted events and a settable player list.
 #[derive(Debug, Default)]
 pub struct MockMediaWatcher {
     script: ScriptedWatch,
-    players: Mutex<Vec<String>>,
+    players: Mutex<Vec<MediaPlayer>>,
 }
 
 impl MockMediaWatcher {
@@ -22,7 +22,7 @@ impl MockMediaWatcher {
     scripted_watch_methods!();
 
     /// Replaces what `players` returns.
-    pub fn set_players(&self, players: Vec<String>) {
+    pub fn set_players(&self, players: Vec<MediaPlayer>) {
         *lock(&self.players) = players;
     }
 }
@@ -32,7 +32,7 @@ impl MediaWatcher for MockMediaWatcher {
         self.script.watch(sink)
     }
 
-    fn players(&self) -> BackendFuture<'_, Vec<String>> {
+    fn players(&self) -> BackendFuture<'_, Vec<MediaPlayer>> {
         Box::pin(std::future::ready(Ok(lock(&self.players).clone())))
     }
 }

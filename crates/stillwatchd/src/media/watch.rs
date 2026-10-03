@@ -101,9 +101,10 @@ async fn on_status_changed(conn: &Connection, players: &mut PlayerSet, message: 
 }
 
 fn publish(players: &mut PlayerSet, sink: &dyn EventSink, live: &Live) {
-    live.set(Some(players.names()));
+    live.set(Some(players.all()));
     if let Some(playing) = players.take_change() {
-        tracing::debug!(?playing, "MPRIS playing set changed");
+        let names: Vec<&str> = playing.iter().map(|player| player.name.as_str()).collect();
+        tracing::debug!(players = ?names, "MPRIS playing set changed");
         sink.send(Event::Media { playing });
     }
 }

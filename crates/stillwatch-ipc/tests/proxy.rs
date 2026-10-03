@@ -81,9 +81,9 @@ impl Stub {
         "[]".into()
     }
 
-    fn players(&self) -> Vec<String> {
+    fn players(&self) -> String {
         self.log("Players");
-        vec!["spotify".into()]
+        r#"[{"name":"spotify","identity":"Spotify"}]"#.into()
     }
 
     #[zbus(signal)]
@@ -134,7 +134,10 @@ async fn every_method_reaches_the_server() {
     proxy.prompt_answer("snooze", 45).await.unwrap();
     assert_eq!(proxy.outputs().await.unwrap(), vec!["HDMI-A-1".to_owned()]);
     assert_eq!(proxy.gamepads().await.unwrap(), "[]");
-    assert_eq!(proxy.players().await.unwrap(), vec!["spotify".to_owned()]);
+    assert_eq!(
+        proxy.players().await.unwrap(),
+        r#"[{"name":"spotify","identity":"Spotify"}]"#
+    );
 
     assert_eq!(
         *stub.calls.lock().unwrap(),

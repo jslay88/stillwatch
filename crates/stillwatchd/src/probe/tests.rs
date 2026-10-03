@@ -2,7 +2,7 @@ use std::future;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 
-use stillwatch_core::backend::BackendError;
+use stillwatch_core::backend::{BackendError, MediaPlayer};
 use stillwatch_core::config::{Config, IgnoreRegion};
 use stillwatch_core::detector::BlockDetector;
 use stillwatch_core::luma::{LumaGrid, OutputInfo};
@@ -53,7 +53,7 @@ async fn collect(
     detector: &mut BlockDetector,
     clock: &FakeClock,
     settings: &Settings,
-    playing: &[String],
+    playing: &[MediaPlayer],
 ) -> ProbeSample {
     sample(capture, detector, clock, settings.downscale_width, playing)
         .await

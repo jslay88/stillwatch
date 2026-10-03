@@ -1,3 +1,4 @@
+use crate::backend::MediaPlayer;
 use crate::config::Config;
 use crate::event::CaptureFrame;
 use crate::luma::OutputInfo;
@@ -10,8 +11,8 @@ use crate::stats::DetectionStats;
 /// [`BlockDetector`](crate::detector::BlockDetector) implements it for real;
 /// tests use [`ScriptedDetector`](crate::mocks::ScriptedDetector).
 pub trait StaleDetector: Send {
-    /// Feed one capture tick. `playing` is the list of currently playing MPRIS player names.
-    fn observe(&mut self, frames: &[CaptureFrame], playing: &[String]) -> DetectionStats;
+    /// Feed one capture tick. `playing` is every MPRIS player currently reporting `Playing`.
+    fn observe(&mut self, frames: &[CaptureFrame], playing: &[MediaPlayer]) -> DetectionStats;
     /// Forget all per-block history (snooze expiry while idle, backend rebuild).
     fn reset(&mut self);
     /// The snooze ceiling over the counters as of the last `observe`: blocks

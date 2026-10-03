@@ -2,7 +2,9 @@
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use stillwatch_core::backend::{GamepadSource, HistorySink, MediaWatcher, ScreenCapture};
+use stillwatch_core::backend::{
+    GamepadSource, HistorySink, MediaPlayer, MediaWatcher, ScreenCapture,
+};
 use stillwatch_core::config::{Config, PromptConfig};
 use tokio::sync::mpsc;
 
@@ -27,7 +29,7 @@ pub(super) struct Shared {
     /// Gamepads for the picker. `None` when gamepad input is off.
     pub gamepad: Mutex<Option<Arc<dyn GamepadSource>>>,
     /// Players the media watcher last reported as `Playing`.
-    pub playing: Mutex<Vec<String>>,
+    pub playing: Mutex<Vec<MediaPlayer>>,
     /// MPRIS names for `Players()`.
     pub media: Arc<dyn MediaWatcher>,
     /// Decision history.

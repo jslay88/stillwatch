@@ -5,7 +5,7 @@ use std::io::Write;
 use std::pin::pin;
 
 use anyhow::Context as _;
-use stillwatch_core::backend::ScreenCapture;
+use stillwatch_core::backend::{MediaPlayer, ScreenCapture};
 use stillwatch_core::detector::BlockDetector;
 use stillwatch_core::time::Clock;
 use stillwatch_ipc::json::to_json_lines;
@@ -23,7 +23,7 @@ pub async fn run(
     detector: &mut BlockDetector,
     clock: &dyn Clock,
     settings: &Settings,
-    mut playing: impl FnMut() -> Vec<String>,
+    mut playing: impl FnMut() -> Vec<MediaPlayer>,
     out: &mut dyn Write,
     stop: impl Future<Output = ()>,
 ) -> anyhow::Result<()> {

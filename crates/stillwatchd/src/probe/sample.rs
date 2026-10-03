@@ -1,7 +1,7 @@
 //! One capture tick: outputs → luma grids → [`BlockDetector::observe`] →
 //! [`ProbeSample`].
 
-use stillwatch_core::backend::{BackendError, ScreenCapture};
+use stillwatch_core::backend::{BackendError, MediaPlayer, ScreenCapture};
 use stillwatch_core::detector::BlockDetector;
 use stillwatch_core::event::CaptureFrame;
 use stillwatch_core::stats::DetectionStats;
@@ -22,7 +22,7 @@ pub async fn sample(
     detector: &mut BlockDetector,
     clock: &dyn Clock,
     downscale_width: u32,
-    playing: &[String],
+    playing: &[MediaPlayer],
 ) -> Result<ProbeSample, BackendError> {
     let outputs = capture.outputs().await?;
     detector.set_outputs(&outputs);

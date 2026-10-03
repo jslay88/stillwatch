@@ -4,12 +4,13 @@
 //! switch to `media_stale_percent`. It reports every playing player; the
 //! detector applies `media_ignore_players`. Players are found with
 //! `ListNames` and followed with `NameOwnerChanged`, and their status with
-//! `PropertiesChanged`, so nothing polls. `PlaybackStatus` is the only
-//! property ever read.
+//! `PropertiesChanged`, so nothing polls. `PlaybackStatus` is read when it
+//! changes. `Identity` is read once per player from `org.mpris.MediaPlayer2`.
+//! `Metadata` is never read.
 //!
 //! Player names are the bus name without `org.mpris.MediaPlayer2.`
-//! (`spotify`, `firefox.instance_1_42`), which is what `media_ignore_players`
-//! entries match against.
+//! (`spotify`, `firefox.instance_1_42`). `Identity` is carried next to that
+//! name. `media_ignore_players` matches either one.
 
 mod bus;
 mod players;
@@ -18,7 +19,7 @@ mod watch;
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use stillwatch_core::backend::{BackendFuture, EventSink, MediaWatcher};
+use stillwatch_core::backend::{BackendFuture, EventSink, MediaPlayer, MediaWatcher};
 
 use self::players::PlayerSet;
 use crate::dbus::Bus;
@@ -68,15 +69,15 @@ impl MediaWatcher for MprisWatcher {
 
     /// Served from the running watch when there is one, otherwise read from
     /// the bus.
-    fn players(&self) -> BackendFuture<'_, Vec<String>> {
+    fn players(&self) -> BackendFuture<'_, Vec<MediaPlayer>> {
         Box::pin(async move {
-            if let Some(names) = self.live.get() {
-                return Ok(names);
+            if let Some(players) = self.live.get() {
+                return Ok(players);
             }
             let conn = bus::connect(&self.bus).await?;
             let mut players = PlayerSet::default();
             bus::discover(&conn, &mut players).await?;
-            Ok(players.names())
+            Ok(players.all())
         })
     }
 }
@@ -84,14 +85,14 @@ impl MediaWatcher for MprisWatcher {
 /// Every player's name as the running watch last saw them; `None` while no
 /// watch is running.
 #[derive(Debug, Default)]
-pub(crate) struct Live(Mutex<Option<Vec<String>>>);
+pub(crate) struct Live(Mutex<Option<Vec<MediaPlayer>>>);
 
 impl Live {
-    pub(crate) fn set(&self, names: Option<Vec<String>>) {
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = names;
+    pub(crate) fn set(&self, players: Option<Vec<MediaPlayer>>) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = players;
     }
 
-    fn get(&self) -> Option<Vec<String>> {
+    fn get(&self) -> Option<Vec<MediaPlayer>> {
         self.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)

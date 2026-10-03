@@ -1,9 +1,8 @@
-//! MPRIS names, the one property Stillwatch reads, and parsing its change
-//! signals.
+//! MPRIS names, the properties Stillwatch reads, and parsing status changes.
 //!
-//! `PlaybackStatus` is the only property ever requested: nothing here calls
-//! `GetAll`, so `Metadata` (track titles, artists, URLs) and even `Identity`
-//! are never asked for.
+//! `PlaybackStatus` is read whenever it changes. `Identity` is read once, from
+//! the root interface, when a player appears. Nothing here calls `GetAll`, so
+//! `Metadata` (track titles, artists, URLs) is never asked for.
 
 use std::collections::HashMap;
 
@@ -18,8 +17,11 @@ pub(crate) const ROOT_INTERFACE: &str = "org.mpris.MediaPlayer2";
 /// The player interface, which carries `PlaybackStatus`.
 pub(crate) const PLAYER_INTERFACE: &str = "org.mpris.MediaPlayer2.Player";
 
-/// The only property Stillwatch reads.
+/// `PlaybackStatus` on the player interface.
 pub(crate) const PLAYBACK_STATUS: &str = "PlaybackStatus";
+
+/// `Identity` on the root interface. Read once per player, never `Metadata`.
+pub(crate) const IDENTITY: &str = "Identity";
 
 const BUS_NAME_PREFIX: &str = "org.mpris.MediaPlayer2.";
 

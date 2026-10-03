@@ -1,8 +1,15 @@
-use super::super::catalog::{ACTIVITY_PULSE_SECONDS, GamepadSeen, activity_lit};
+use super::super::catalog::{ACTIVITY_PULSE_SECONDS, GamepadSeen, PlayerSeen, activity_lit};
 use super::{
-    NOT_CONNECTED, gamepad_rows, output_rows, player_rows, player_value, set_exact, set_gamepad,
-    set_player,
+    NOT_CONNECTED, gamepad_rows, output_rows, player_label, player_rows, player_value, set_exact,
+    set_gamepad, set_player,
 };
+
+fn seen(name: &str, identity: &str) -> PlayerSeen {
+    PlayerSeen {
+        name: name.to_owned(),
+        identity: identity.to_owned(),
+    }
+}
 
 fn pad(name: &str, age: Option<u64>) -> GamepadSeen {
     GamepadSeen {
@@ -100,15 +107,17 @@ fn player_rows_store_the_stem_and_keep_absent_names() {
     assert_eq!(player_value("spotify"), "spotify");
 
     let live = vec![
-        "firefox.instance_1_42".into(),
-        "firefox.instance_9".into(),
-        "spotify".into(),
+        seen("firefox.instance_1_42", "Firefox"),
+        seen("firefox.instance_9", "Firefox"),
+        seen("spotify", "Spotify"),
     ];
     let rows = player_rows(&["firefox".into(), "vlc".into()], &live);
     assert_eq!(rows[0].value, "firefox");
+    assert_eq!(rows[0].label, "firefox · Firefox");
     assert!(rows[0].selected);
     assert!(rows[0].connected);
     assert_eq!(rows[1].value, "spotify");
+    assert_eq!(rows[1].label, player_label("spotify", "Spotify"));
     assert!(!rows[1].selected);
     assert_eq!(rows[2].value, "vlc");
     assert!(!rows[2].connected);
@@ -125,7 +134,7 @@ fn player_rows_store_the_stem_and_keep_absent_names() {
 
 #[test]
 fn an_old_player_instance_name_still_selects_the_live_stem() {
-    let live = ["firefox.instance_1_42".to_owned()];
+    let live = [seen("firefox.instance_1_42", "Firefox")];
     let rows = player_rows(&["firefox.instance_1_42".into()], &live);
     assert_eq!(rows.len(), 1);
     assert!(rows[0].selected);
@@ -134,4 +143,25 @@ fn an_old_player_instance_name_still_selects_the_live_stem() {
         set_player(&["firefox.instance_1_42".into()], "firefox", &live, false),
         Vec::<String>::new()
     );
+}
+
+#[test]
+fn an_identity_entry_selects_the_live_player_and_free_text_stays_without_one() {
+    let live = [seen("vlc", "VLC media player")];
+    let rows = player_rows(&["VLC media player".into()], &live);
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].selected);
+    assert!(rows[0].connected);
+    assert_eq!(rows[0].value, "vlc");
+    assert_eq!(rows[0].label, "vlc · VLC media player");
+    assert_eq!(
+        set_player(&["VLC media player".into()], "vlc", &live, false),
+        Vec::<String>::new()
+    );
+
+    let absent = player_rows(&["VLC media player".into()], &[]);
+    assert_eq!(absent.len(), 1);
+    assert!(!absent[0].connected);
+    assert_eq!(absent[0].value, "VLC media player");
+    assert_eq!(absent[0].label, "VLC media player");
 }

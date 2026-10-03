@@ -18,7 +18,7 @@
 //! | `PromptAnswer(s kind, u minutes)` | | see [`crate::prompt`]; snoozes follow the same rules as `Snooze` |
 //! | `Outputs()` | `-> as` | connected output names |
 //! | `Gamepads()` | `-> s` | JSON array of [`GamepadInfo`](crate::gamepad::GamepadInfo) |
-//! | `Players()` | `-> as` | MPRIS player names |
+//! | `Players()` | `-> s` | JSON array of [`PlayerInfo`](crate::player::PlayerInfo) |
 //! | signal `StateChanged(s state)` | | `State::as_str` name |
 //! | signal `ConfigChanged(b ok, as errors)` | | after every reload attempt |
 //! | signal `ProbeSample(s json)` | | JSON [`ProbeSample`](crate::probe::ProbeSample) |
@@ -76,8 +76,8 @@ pub trait Stillwatch {
     /// Detected gamepads as a JSON array of `GamepadInfo`.
     fn gamepads(&self) -> zbus::Result<String>;
 
-    /// MPRIS player names currently on the bus.
-    fn players(&self) -> zbus::Result<Vec<String>>;
+    /// MPRIS players currently on the bus, as a JSON array of `PlayerInfo`.
+    fn players(&self) -> zbus::Result<String>;
 
     /// The daemon moved to `state`.
     #[zbus(signal)]

@@ -3,6 +3,7 @@ use toml::Table;
 
 use super::test_support::fixture;
 use super::*;
+use crate::backend::MediaPlayer;
 
 const SECTIONS: [&str; 11] = [
     "idle",
@@ -316,20 +317,32 @@ fn normal_path_seconds_does_not_overflow() {
 }
 
 #[test]
-fn media_ignore_matches_players_and_their_instances() {
+fn media_ignore_matches_suffixes_and_identity() {
     let stale = StaleConfig {
         media_ignore_players: vec!["spotify".into(), "firefox".into()],
         ..StaleConfig::default()
     };
-    assert!(stale.is_player_ignored("spotify"));
-    assert!(stale.is_player_ignored("Spotify"));
-    assert!(stale.is_player_ignored("firefox.instance_1_42"));
-    assert!(!stale.is_player_ignored("firefoxdev"));
-    assert!(!stale.is_player_ignored("vlc"));
-    assert!(!stale.is_player_ignored("spot"));
+    assert!(stale.is_player_ignored("spotify", ""));
+    assert!(stale.is_player_ignored("Spotify", "Spotify"));
+    assert!(stale.is_player_ignored("firefox.instance_1_42", "Mozilla Firefox"));
+    assert!(!stale.is_player_ignored("firefoxdev", "Mozilla Firefox"));
+    assert!(!stale.is_player_ignored("vlc", "VLC media player"));
+    assert!(!stale.is_player_ignored("spot", ""));
     assert!(!stale.media_playing(&[]));
     assert!(!stale.media_playing(&["spotify".into()]));
     assert!(stale.media_playing(&["spotify".into(), "mpv".into()]));
+
+    let by_identity = StaleConfig {
+        media_ignore_players: vec!["VLC media player".into()],
+        ..StaleConfig::default()
+    };
+    let vlc = MediaPlayer::with_identity("vlc", "VLC media player");
+    assert!(by_identity.is_player_ignored(&vlc.name, &vlc.identity));
+    assert!(by_identity.is_player_ignored("vlc", "vlc media player"));
+    assert!(!by_identity.is_player_ignored("vlc", "VLC"));
+    assert!(!by_identity.is_player_ignored("vlc", "VLC media player extra"));
+    assert!(!by_identity.media_playing(std::slice::from_ref(&vlc)));
+    assert!(by_identity.media_playing(&[MediaPlayer::with_identity("mpv", "mpv")]));
 }
 
 #[test]

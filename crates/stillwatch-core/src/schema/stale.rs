@@ -54,7 +54,10 @@ pub(super) const SECTION: Section = Section {
             "stale.media_ignore_players",
             "Ignored media players",
             Control::PlayerPicker,
-            "MPRIS players that don't raise the threshold, such as audio-only players.",
+            "MPRIS players that don't raise the threshold, such as audio-only players. \
+             An entry matches a bus-name suffix (`firefox` covers \
+             `firefox.instance_1_42`) or the player's Identity, such as \
+             `VLC media player`.",
         ),
         Setting::new(
             "stale.luma_delta_threshold",
