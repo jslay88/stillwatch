@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+# Every gate goes through `cargo xtask` so CI and `cargo xtask ci` run the same code.
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # actions/checkout needs git in the container to produce a real clone.
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./.github/actions/setup
+
+      # Gates after setup run even if an earlier gate failed, so one push reports all of them.
+      - name: fmt
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask gate fmt --strict
+      - name: clippy
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask gate clippy --strict
+      - name: check-size
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask check-size
+      - name: jscpd
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask gate jscpd --strict
+      - name: cargo deny
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask gate deny --strict
+      - name: cargo machete
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask gate machete --strict
+      - name: build benches
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask gate bench --strict
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      - name: Tests and coverage thresholds
+        run: cargo xtask coverage
+      - name: Upload lcov
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: lcov
+          path: target/coverage/lcov.info
+          if-no-files-found: warn
