@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use evdev::AbsoluteAxisCode as Abs;
+use evdev::{AbsoluteAxisCode as Abs, KeyCode as Key};
 use stillwatch_core::backend::{BackendError, GamepadSource};
 use stillwatch_core::event::{ActivityEvent, Event};
 use stillwatch_core::mocks::RecordingSink;
@@ -19,6 +19,7 @@ use super::{ACTIVITY_INTERVAL, EvdevGamepadSource, GamepadSettings, Watcher};
 
 const PAD: &str = "/dev/input/event20";
 const OTHER: &str = "/dev/input/event21";
+const KEYBOARD: &str = "/dev/input/event17";
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap()
@@ -26,6 +27,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 struct FakePad {
     name: String,
+    keys: Vec<u16>,
     axes: Axes,
     inputs: mpsc::UnboundedReceiver<io::Result<PadInput>>,
     polls: watch::Sender<usize>,
@@ -34,6 +36,10 @@ struct FakePad {
 impl Pad for FakePad {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn keys(&self) -> &[u16] {
+        &self.keys
     }
 
     fn axes(&self) -> Axes {
@@ -153,11 +159,18 @@ impl Harness {
 
     /// Queues an openable pad for the next `open(node)`.
     fn plug(&self, node: &str, name: &str) -> PadHandle {
+        self.plug_with(node, name, &[Key::BTN_SOUTH], stick())
+    }
+
+    /// Queues an openable device with these capabilities for the next
+    /// `open(node)`.
+    fn plug_with(&self, node: &str, name: &str, keys: &[Key], axes: Axes) -> PadHandle {
         let (inputs, rx) = mpsc::unbounded_channel();
         let (polls_tx, polls) = watch::channel(0);
         let pad = FakePad {
             name: name.into(),
-            axes: stick(),
+            keys: keys.iter().map(|key| key.0).collect(),
+            axes,
             inputs: rx,
             polls: polls_tx,
         };
@@ -388,6 +401,18 @@ impl Write for Logs {
 }
 
 impl Logs {
+    /// Captures debug logs on this thread until the guard drops.
+    fn capture() -> (Self, tracing::subscriber::DefaultGuard) {
+        let logs = Self::default();
+        let writer = logs.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || writer.clone())
+            .with_ansi(false)
+            .with_max_level(tracing::Level::DEBUG)
+            .finish();
+        (logs, tracing::subscriber::set_default(subscriber))
+    }
+
     fn count(&self, needle: &str) -> usize {
         String::from_utf8_lossy(&lock(&self.0))
             .matches(needle)
@@ -395,16 +420,56 @@ impl Logs {
     }
 }
 
+fn hats() -> Axes {
+    let hat = AxisRange {
+        min: -1,
+        max: 1,
+        flat: 0,
+        value: 0,
+    };
+    Axes::new([(Abs::ABS_HAT0X.0, hat), (Abs::ABS_HAT0Y.0, hat)])
+}
+
+#[tokio::test]
+async fn nodes_that_arent_gamepads_are_closed_skipped_and_logged_once() {
+    let (logs, _guard) = Logs::capture();
+    let mut h = Harness::new(&GamepadSettings::default());
+    h.present(&[KEYBOARD, PAD]);
+    let keyboard = h.plug_with(
+        KEYBOARD,
+        "Keychron K5 System Control",
+        &[Key::KEY_POWER, Key::KEY_SLEEP],
+        hats(),
+    );
+    let mut pad = h.plug(PAD, "Xbox Controller");
+    h.start();
+    eventually(|| h.device_ids() == [PAD]).await;
+    eventually(|| keyboard.inputs.is_closed()).await;
+
+    h.change(Hotplug::Added(KEYBOARD.into()));
+    let buttons_only = h.plug_with(OTHER, "Button Box", &[Key::BTN_TRIGGER], Axes::default());
+    h.change(Hotplug::Added(OTHER.into()));
+    eventually(|| h.open_calls() == 3).await;
+    eventually(|| buttons_only.inputs.is_closed()).await;
+    assert_eq!(h.device_ids(), [PAD]);
+    assert_eq!(logs.count("not a gamepad"), 2);
+    assert_eq!(logs.count("Keychron K5 System Control"), 1);
+    assert_eq!(logs.count("no joystick or gamepad buttons"), 1);
+    assert_eq!(logs.count("no absolute axes"), 1);
+
+    pad.send(PadInput::Button).await;
+    assert_eq!(h.activity(), [PAD]);
+
+    h.change(Hotplug::Removed(KEYBOARD.into()));
+    let _replugged = h.plug(KEYBOARD, "Flight Stick");
+    h.change(Hotplug::Added(KEYBOARD.into()));
+    eventually(|| h.device_ids() == [KEYBOARD, PAD]).await;
+    assert_eq!(h.open_calls(), 4);
+}
+
 #[tokio::test]
 async fn permission_errors_are_logged_once_and_dont_stop_the_source() {
-    let logs = Logs::default();
-    let writer = logs.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(move || writer.clone())
-        .with_ansi(false)
-        .with_max_level(tracing::Level::DEBUG)
-        .finish();
-    let _guard = tracing::subscriber::set_default(subscriber);
+    let (logs, _guard) = Logs::capture();
 
     let mut h = Harness::new(&GamepadSettings::default());
     h.present(&[PAD]);

@@ -4,13 +4,16 @@
 //! Joysticks are the `input` subsystem's `/dev/input/event*` nodes tagged
 //! `ID_INPUT_JOYSTICK`. udev's `uaccess` tag lets the logged-in user read
 //! them. Every node gets its own async event stream; a udev monitor opens
-//! new pads and drops removed ones while running.
+//! new pads and drops removed ones while running. A tagged node without
+//! joystick buttons or absolute axes (a keyboard's media keys) is closed again
+//! and skipped until it goes away.
 //!
 //! Ignored pads stay open so the GUI picker can still show their activity.
 //! A disabled source (`activity.gamepad = false`) is simply never watched:
 //! construction opens nothing.
 
 mod axis;
+mod capability;
 mod evdev_pad;
 mod platform;
 mod registry;

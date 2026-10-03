@@ -59,6 +59,9 @@ pub(crate) trait Pad: Send + 'static {
     /// The name the device reports.
     fn name(&self) -> &str;
 
+    /// Every key and button code the device declares.
+    fn keys(&self) -> &[u16];
+
     /// The absolute axes, as they were when the device was opened.
     fn axes(&self) -> Axes;
 
