@@ -4,6 +4,7 @@
 //! SIGTERM or SIGINT. The idle, capture, and action loop plugs in here later.
 
 pub mod args;
+pub mod gamepad;
 pub mod idle;
 pub mod signals;
 pub mod supervise;
