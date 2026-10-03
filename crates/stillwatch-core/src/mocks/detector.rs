@@ -1,7 +1,9 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use crate::config::Config;
 use crate::event::CaptureFrame;
+use crate::luma::OutputInfo;
 use crate::state::StaleDetector;
 use crate::stats::{BlockCounts, DetectionStats, OutputStats, Threshold, ThresholdReason};
 use crate::sync::lock;
@@ -33,6 +35,8 @@ struct Inner {
     resets: usize,
     ceiling: Option<DetectionStats>,
     ceiling_queries: usize,
+    configs: Vec<Config>,
+    outputs: Vec<Vec<OutputInfo>>,
 }
 
 impl ScriptedDetector {
@@ -106,6 +110,18 @@ impl ScriptedDetector {
     pub fn ceiling_queries(&self) -> usize {
         lock(&self.inner).ceiling_queries
     }
+
+    /// Every config passed to `apply_config`, oldest first.
+    #[must_use]
+    pub fn configs(&self) -> Vec<Config> {
+        lock(&self.inner).configs.clone()
+    }
+
+    /// Every output list passed to `set_outputs`, oldest first.
+    #[must_use]
+    pub fn output_updates(&self) -> Vec<Vec<OutputInfo>> {
+        lock(&self.inner).outputs.clone()
+    }
 }
 
 impl StaleDetector for ScriptedDetector {
@@ -129,6 +145,14 @@ impl StaleDetector for ScriptedDetector {
         let mut inner = lock(&self.inner);
         inner.ceiling_queries += 1;
         inner.ceiling.clone()
+    }
+
+    fn apply_config(&mut self, config: &Config) {
+        lock(&self.inner).configs.push(config.clone());
+    }
+
+    fn set_outputs(&mut self, outputs: &[OutputInfo]) {
+        lock(&self.inner).outputs.push(outputs.to_vec());
     }
 }
 
@@ -177,5 +201,21 @@ mod tests {
             assert_eq!(stats.threshold.reason, ThresholdReason::Ceiling);
         }
         assert_eq!(handle.ceiling_queries(), 3);
+    }
+
+    #[test]
+    fn records_configs_and_output_updates() {
+        let handle = ScriptedDetector::new();
+        let mut detector = handle.clone();
+        let mut config = Config::default();
+        config.stale.stale_percent = 50;
+        detector.apply_config(&config);
+        detector.set_outputs(&[OutputInfo::new("DP-1", 3840, 2160)]);
+        detector.set_outputs(&[]);
+        assert_eq!(handle.configs(), vec![config]);
+        assert_eq!(
+            handle.output_updates(),
+            vec![vec![OutputInfo::new("DP-1", 3840, 2160)], vec![]]
+        );
     }
 }

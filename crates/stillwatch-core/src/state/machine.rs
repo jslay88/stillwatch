@@ -71,11 +71,13 @@ impl StateMachine {
     /// which is re-armed with the new interval while capturing (or started
     /// or stopped when the ceiling settings change), and the locked blank
     /// delay, which starts or stops with `session.when_locked`. The detector
-    /// keeps its counters; when detection settings change, build a new one
-    /// and pass it to [`replace_detector`](Self::replace_detector).
+    /// gets the config too ([`StaleDetector::apply_config`]): it keeps its
+    /// block counters unless a key that resets detection changed, so a
+    /// reload never needs [`replace_detector`](Self::replace_detector).
     pub fn apply_config(&mut self, now: Instant, wall: Timestamp, config: &Config) -> Vec<Command> {
         self.ctx.begin(now, wall);
         self.ctx.config = config.clone();
+        self.ctx.detector.apply_config(config);
         handler(self.state).reconfigure(&mut self.ctx);
         let entry = self.ctx.history(HistoryKind::ConfigReload);
         self.ctx.emit(Command::Record(entry));
@@ -126,8 +128,10 @@ impl StateMachine {
         self.ctx.take_commands()
     }
 
-    /// Swaps in a freshly built detector, for example after `block_grid` or
-    /// the capture backend changed. The new detector starts with no history.
+    /// Swaps in a different detector, which starts with no history and no
+    /// output sizes until the next `Event::OutputsChanged`. Reloads and
+    /// hotplug don't need this: [`apply_config`](Self::apply_config) and
+    /// `Event::OutputsChanged` reach the current detector.
     pub fn replace_detector(&mut self, detector: Box<dyn StaleDetector>) {
         self.ctx.detector = detector;
     }

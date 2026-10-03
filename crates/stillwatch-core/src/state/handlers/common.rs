@@ -2,10 +2,11 @@
 //!
 //! Suspend and resume: `PrepareForSleep` lets the current state stop its
 //! timers (most states wait out the sleep in Active, while Locked and Paused
-//! stay put), and every event but `ResumedFromSleep` is then dropped. The
-//! monotonic clock stops while the system sleeps, so nothing armed before
-//! sleep could be trusted afterwards. On resume the user counts as present
-//! and the detector starts over.
+//! stay put), and every event but `ResumedFromSleep` is then dropped once
+//! its facts (lock state, media, outputs) are noted. The monotonic clock
+//! stops while the system sleeps, so nothing armed before sleep could be
+//! trusted afterwards. On resume the user counts as present and the detector
+//! starts over.
 
 use super::super::State;
 use super::super::context::{Ctx, Transition};
@@ -44,6 +45,7 @@ pub(in crate::state) fn observe(ctx: &mut Ctx, event: &Event) -> bool {
             return true;
         }
         Event::Media { playing } => ctx.playing.clone_from(playing),
+        Event::OutputsChanged(outputs) => ctx.detector.set_outputs(outputs),
         Event::Timer(id) => ctx.fired(*id),
         _ => {}
     }
