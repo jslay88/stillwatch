@@ -3421,6 +3421,7 @@ dependencies = [
  "anyhow",
  "clap",
  "futures-util",
+ "humantime",
  "iced",
  "jiff",
  "ksni",

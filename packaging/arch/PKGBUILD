@@ -21,7 +21,6 @@ depends=(kscreen dbus pipewire xdg-desktop-portal)
 makedepends=(cargo)
 optdepends=(
     'ddcutil: DDC/CI standby needs the i2c-dev module; ddcutil loads it and can probe the bus'
-    'kdialog: dialog prompt fallback'
 )
 options=(!debug !lto)
 source=()

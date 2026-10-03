@@ -10,7 +10,7 @@ use stillwatch_core::history::{HistoryEntry, HistoryKind, PromptMedium, PromptRe
 use stillwatch_core::prompt::{PromptOutcome, PromptRequest, Reminder};
 use stillwatch_core::time::{Clock, SystemClock};
 
-use super::dialog::{DialogLauncher, KdialogLauncher};
+use super::dialog::{DialogLauncher, GuiLauncher};
 use super::fullscreen::{FullscreenMonitor, UnverifiedFullscreen};
 use super::notification::NotificationPrompter;
 use super::select::{self, Choice, NOTIFICATIONS_HIDDEN_OVER_FULLSCREEN, PromptFacts};
@@ -21,7 +21,7 @@ pub struct PromptParts {
     /// Notification prompter. `show` failing or returning
     /// [`PromptOutcome::Dismissed`] can fall back to the dialog.
     pub notifications: Arc<dyn Prompter>,
-    /// Dialog. Tests pass a mock; the daemon passes [`KdialogLauncher`].
+    /// Dialog. Tests pass a mock; the daemon passes [`GuiLauncher`].
     pub dialogs: Arc<dyn DialogLauncher>,
     /// Fullscreen check. Consulted only when notifications are known to be
     /// hidden by a fullscreen surface.
@@ -63,6 +63,10 @@ pub struct StylePrompter {
     /// can change urgency.
     urgency: Option<Arc<NotificationPrompter>>,
     settings: Mutex<Settings>,
+    /// `stillwatch-gui prompt --custom`, spawned when a notification's
+    /// "Custom..." action is chosen. Aborted by the next prompt or by
+    /// [`dismiss`](Prompter::dismiss). Its outcome is not a second answer.
+    custom: Mutex<Option<tokio::task::AbortHandle>>,
     /// Bumped by each `show` and by `dismiss`. An in-flight show whose token
     /// no longer matches was replaced or dismissed and must not fall back.
     epoch: AtomicU64,
@@ -84,18 +88,19 @@ impl StylePrompter {
                 fallback_to_dialog: parts.fallback_to_dialog,
                 notifications_hidden_over_fullscreen: parts.notifications_hidden_over_fullscreen,
             }),
+            custom: Mutex::new(None),
             epoch: AtomicU64::new(0),
         }
     }
 
-    /// Notification on the session bus, interim `kdialog`, and no fullscreen
-    /// probe. `auto` uses the notification.
+    /// Notification on the session bus, the GUI prompt dialog, and no
+    /// fullscreen probe. `auto` uses the notification.
     #[must_use]
     pub fn session(prompt: &PromptConfig, history: Arc<dyn HistorySink>) -> Self {
         let notifications = Arc::new(NotificationPrompter::session(prompt.urgency));
         let mut prompter = Self::new(PromptParts {
             notifications: Arc::clone(&notifications) as Arc<dyn Prompter>,
-            dialogs: Arc::new(KdialogLauncher::new(Arc::new(TokioRunner))),
+            dialogs: Arc::new(GuiLauncher::new(Arc::new(TokioRunner))),
             fullscreen: Arc::new(UnverifiedFullscreen),
             history,
             clock: Arc::new(SystemClock),
@@ -170,7 +175,14 @@ impl StylePrompter {
         epoch: u64,
     ) -> Result<PromptOutcome, BackendError> {
         let result = self.notifications.show(request.clone()).await;
-        if self.superseded(epoch) || !self.settings().fallback_to_dialog {
+        if self.superseded(epoch) {
+            return result;
+        }
+        if matches!(result, Ok(PromptOutcome::CustomRequested)) {
+            self.open_custom(request, started);
+            return result;
+        }
+        if !self.settings().fallback_to_dialog {
             return result;
         }
         match result {
@@ -200,12 +212,36 @@ impl StylePrompter {
         let request = with_remaining(request, started, self.clock.as_ref());
         self.dialogs.launch(request).await
     }
+
+    /// "Custom..." stays in Prompting. The dialog's later `PromptAnswer` is
+    /// the real answer, so this task's result is dropped.
+    fn open_custom(&self, request: PromptRequest, started: Instant) {
+        self.abort_custom();
+        if tokio::runtime::Handle::try_current().is_err() {
+            return;
+        }
+        let request = with_remaining(request, started, self.clock.as_ref());
+        let dialogs = Arc::clone(&self.dialogs);
+        let task = tokio::spawn(async move {
+            if let Err(error) = dialogs.launch_custom(request).await {
+                tracing::warn!(%error, "custom prompt dialog failed");
+            }
+        });
+        *lock(&self.custom) = Some(task.abort_handle());
+    }
+
+    fn abort_custom(&self) {
+        if let Some(handle) = lock(&self.custom).take() {
+            handle.abort();
+        }
+    }
 }
 
 impl Prompter for StylePrompter {
     fn show(&self, request: PromptRequest) -> BackendFuture<'_, PromptOutcome> {
         Box::pin(async move {
             let epoch = self.epoch.fetch_add(1, Ordering::SeqCst) + 1;
+            self.abort_custom();
             let _ = self.dialogs.dismiss().await;
             let started = self.clock.now();
             let choice = self.choose().await;
@@ -222,6 +258,7 @@ impl Prompter for StylePrompter {
     fn dismiss(&self) -> BackendFuture<'_, ()> {
         Box::pin(async move {
             self.epoch.fetch_add(1, Ordering::SeqCst);
+            self.abort_custom();
             self.notifications.dismiss().await?;
             self.dialogs.dismiss().await?;
             Ok(())

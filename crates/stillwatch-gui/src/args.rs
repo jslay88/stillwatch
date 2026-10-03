@@ -24,22 +24,30 @@ pub struct Cli {
 }
 
 /// How to start the GUI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Subcommand)]
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
 pub enum Command {
     /// Open the settings window.
     Settings,
-    /// Open the prompt window (the dialog itself is a later change).
-    Prompt,
+    /// Open the prompt dialog. It answers over D-Bus and exits.
+    Prompt {
+        /// Seconds left on the countdown. Without this, the dialog uses the
+        /// daemon status and `prompt.countdown_seconds`.
+        #[arg(long, value_name = "SECS")]
+        remaining: Option<u64>,
+        /// Open on the custom duration field.
+        #[arg(long)]
+        custom: bool,
+    },
 }
 
 impl Cli {
     /// The launch mode implied by the parsed arguments.
     #[must_use]
     pub const fn launch_mode(&self) -> LaunchMode {
-        match self.command {
+        match &self.command {
             None => LaunchMode::Tray,
             Some(Command::Settings) => LaunchMode::Settings,
-            Some(Command::Prompt) => LaunchMode::Prompt,
+            Some(Command::Prompt { .. }) => LaunchMode::Prompt,
         }
     }
 }
