@@ -64,9 +64,10 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
-      # kwin_wayland has the cap_sys_nice file capability; exec fails with EPERM
-      # when the container's bounding set lacks it.
-      options: --cap-add=SYS_NICE
+      # SYS_NICE: kwin_wayland's cap_sys_nice file capability. /dev/kvm lets the
+      # coverage guest boot with the distro kernel (vgem + llvmpipe). Not
+      # --privileged: that exposes /dev/uinput and breaks gamepad_uinput.
+      options: --cap-add=SYS_NICE --device=/dev/kvm
     env:
       # Private-bus D-Bus tests fail instead of skipping when dbus-daemon is missing.
       STILLWATCH_REQUIRE_DBUS: "1"
@@ -79,7 +80,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Tests and coverage thresholds
-        run: cargo xtask coverage
+        run: .github/scripts/coverage-guest.sh
       - name: Upload lcov
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

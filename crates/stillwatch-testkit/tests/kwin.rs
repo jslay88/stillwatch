@@ -110,21 +110,16 @@ async fn screenshot2_trusts_only_authorized_executables() {
     assert!(refused.to_string().contains("not authorized"), "{refused}");
     drop(stranger);
 
+    let width = 1280u32;
+    let height = 720u32;
     let options = KwinOptions {
+        width,
+        height,
         authorize: vec![Authorization::current_exe(&[SCREENSHOT2]).unwrap()],
         ..KwinOptions::default()
     };
     let kwin = Kwin::start(options).await.unwrap().unwrap();
-    match capture(&kwin).await {
-        Ok(frame) => {
-            eprintln!("ScreenShot2 returned a frame: {frame:?}");
-            assert_eq!(frame.get("width"), Some(&OwnedValue::from(1920_u32)));
-        }
-        // QPainter compositing (no render node) accepts the caller but has
-        // nothing to capture from.
-        Err(err) => {
-            eprintln!("ScreenShot2 authorized the caller but didn't capture: {err}");
-            assert!(!err.to_string().contains("not authorized"), "{err}");
-        }
-    }
+    let frame = capture(&kwin).await.expect("ScreenShot2 frame");
+    assert_eq!(frame.get("width"), Some(&OwnedValue::from(width)));
+    assert_eq!(frame.get("height"), Some(&OwnedValue::from(height)));
 }

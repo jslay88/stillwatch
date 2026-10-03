@@ -1,0 +1,85 @@
+#!/bin/bash
+# PID 1 inside the coverage guest. The host passes stillwatch_env=<file> on
+# the kernel command line. That file is on the virtiofs root.
+
+set -u
+
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm /run /tmp
+mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts
+mountpoint -q /dev/shm || mount -t tmpfs tmpfs /dev/shm
+# Wayland and D-Bus sockets misbehave on virtiofs. Keep them on tmpfs.
+mount -t tmpfs -o mode=755 tmpfs /run
+mount -t tmpfs -o mode=1777 tmpfs /tmp
+
+exec >/dev/ttyS0 2>&1
+echo "guest init: $(uname -r)"
+
+status=1
+statusfile=""
+poweroff_bin=""
+
+finish() {
+    if [[ -n "$statusfile" ]]; then
+        mkdir -p "$(dirname "$statusfile")"
+        printf '%s\n' "$status" >"$statusfile"
+        sync
+    fi
+    if [[ -n "$poweroff_bin" && -x "$poweroff_bin" ]]; then
+        "$poweroff_bin"
+    fi
+    echo 1 >/proc/sys/kernel/sysrq 2>/dev/null || true
+    echo o >/proc/sysrq-trigger 2>/dev/null || true
+    sleep 2
+}
+trap finish EXIT
+
+envfile=""
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+    stillwatch_env=*) envfile=${arg#stillwatch_env=} ;;
+    esac
+done
+if [[ -z "$envfile" || ! -f "$envfile" ]]; then
+    echo "guest: stillwatch_env is missing ($envfile)"
+    exit 1
+fi
+# shellcheck disable=SC1090
+source "$envfile"
+statusfile=${STILLWATCH_GUEST_STATUS:-}
+poweroff_bin=${STILLWATCH_POWEROFF:-}
+
+modprobe vgem
+# KWin opens /dev/dri/card1 when it was built without libdrm faux support and
+# CI is set. A symlink covers that build. Enumeration uses card0.
+if [[ -e /dev/dri/card0 && ! -e /dev/dri/card1 ]]; then
+    ln -s card0 /dev/dri/card1
+fi
+echo "guest drm:"
+ls -l /dev/dri
+for device in /sys/class/drm/card*; do
+    echo "  $device -> $(readlink -f "$device/device" 2>/dev/null || true)"
+done
+
+if command -v ip >/dev/null 2>&1; then
+    modprobe virtio_net || true
+    sleep 0.3
+    if ip link show eth0 >/dev/null 2>&1; then
+        ip link set eth0 up || true
+        ip addr add 10.0.2.15/24 dev eth0 || true
+        ip route add default via 10.0.2.2 || true
+        printf 'nameserver 10.0.2.3\n' >/run/resolv.conf
+        mount --bind /run/resolv.conf /etc/resolv.conf || true
+    fi
+fi
+
+cd "$STILLWATCH_WORKSPACE"
+echo "guest: $STILLWATCH_GUEST_CMD"
+set +e
+bash -c "$STILLWATCH_GUEST_CMD"
+status=$?
+set -e
+echo "guest exit $status"
+exit "$status"
