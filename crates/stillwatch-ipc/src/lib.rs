@@ -6,6 +6,11 @@
 /// Well-known bus name of the Stillwatch daemon.
 pub const BUS_NAME: &str = "io.github.jslay88.Stillwatch";
 
+/// Trips clippy::ptr_arg.
+pub fn count(items: &Vec<u32>) -> usize {
+    items.len()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
