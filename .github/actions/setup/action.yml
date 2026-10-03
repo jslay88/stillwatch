@@ -14,7 +14,7 @@ runs:
         base-devel git rustup nodejs npm clang pkgconf
         wayland libxkbcommon systemd systemd-libs dbus pipewire libpipewire mesa
         vulkan-icd-loader fontconfig freetype2 kwin libkscreen xdg-desktop-portal
-        desktop-file-utils
+        desktop-file-utils shellcheck namcap
 
     - name: Install Rust from .tool-versions
       shell: bash

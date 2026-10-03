@@ -1,8 +1,13 @@
-//! Checks the systemd user unit and the desktop files.
+//! Checks the systemd user unit, the desktop files, the example hooks, and
+//! the PKGBUILD.
 //!
 //! [`Gate::Packaging`](crate::gate::Gate::Packaging) lists `systemd-analyze`
 //! and `desktop-file-validate`. A normal run skips the check when either tool
 //! is missing. `--strict` fails instead, same as the other gates.
+//!
+//! `shellcheck` and `namcap` are optional. A missing one is a skip, including
+//! under `--strict`, because the packaging gate's required tools are the
+//! systemd and desktop checkers.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,6 +23,10 @@ const STAND_INS: [&str; 2] = ["/usr/bin/true", "/bin/true"];
 /// Runs `systemd-analyze verify --user` on the unit and `desktop-file-validate`
 /// on every `packaging/*.desktop`.
 ///
+/// When `shellcheck` is installed, also checks `packaging/hooks/*.sh`. When
+/// `namcap` is installed, also checks `packaging/arch/PKGBUILD`. Either tool
+/// being missing is a skip.
+///
 /// `ExecStart` is pointed at `/usr/bin/true` (or `/bin/true`) for the verify
 /// step when the packaged binary is not installed yet. The file on disk is
 /// not modified. The rest of the unit, including `ExecReload`, is what
@@ -25,11 +34,13 @@ const STAND_INS: [&str; 2] = ["/usr/bin/true", "/bin/true"];
 ///
 /// # Errors
 ///
-/// Fails if a checker is missing, a packaging file can't be read, or a checker
-/// rejects a file.
+/// Fails if a required checker is missing, a packaging file can't be read, or
+/// a checker rejects a file. `namcap` warnings count as a rejection.
 pub fn check(root: &Path) -> Result<()> {
     verify_unit(root)?;
     validate_desktops(root)?;
+    check_hooks(root)?;
+    check_pkgbuild(root)?;
     Ok(())
 }
 
@@ -90,15 +101,7 @@ fn user_manager_unavailable(stderr: &str) -> bool {
 
 fn validate_desktops(root: &Path) -> Result<()> {
     let dir = root.join("packaging");
-    let mut files = Vec::new();
-    for entry in fs::read_dir(&dir).with_context(|| format!("failed to read {}", dir.display()))? {
-        let entry = entry.with_context(|| format!("failed to read {}", dir.display()))?;
-        let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "desktop") {
-            files.push(path);
-        }
-    }
-    files.sort();
+    let files = files_with_extension(&dir, "desktop")?;
     if files.is_empty() {
         bail!("no desktop files in {}", dir.display());
     }
@@ -107,6 +110,66 @@ fn validate_desktops(root: &Path) -> Result<()> {
         .map(|path| path.display().to_string())
         .collect();
     Step::new("desktop-file-validate", args).run(root)
+}
+
+fn check_hooks(root: &Path) -> Result<()> {
+    if !crate::workspace::on_path("shellcheck") {
+        eprintln!("skipping shellcheck: `shellcheck` is not installed");
+        return Ok(());
+    }
+    let scripts = files_with_extension(&root.join("packaging/hooks"), "sh")?;
+    if scripts.is_empty() {
+        bail!("no example hooks in packaging/hooks");
+    }
+    let mut args = vec!["--shell=sh".to_owned(), "--severity=warning".to_owned()];
+    args.extend(scripts.iter().map(|path| path.display().to_string()));
+    Step::new("shellcheck", args).run(root)
+}
+
+fn check_pkgbuild(root: &Path) -> Result<()> {
+    if !crate::workspace::on_path("namcap") {
+        eprintln!("skipping namcap: `namcap` is not installed");
+        return Ok(());
+    }
+    let pkgbuild = root.join("packaging/arch/PKGBUILD");
+    if !pkgbuild.is_file() {
+        bail!("missing {}", pkgbuild.display());
+    }
+    let path = path_str(&pkgbuild)?;
+    let step = Step::new("namcap", [path]);
+    eprintln!("+ {step}");
+    let output = step.captured(root)?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+    if !output.status.success() || report_has_findings(&combined) {
+        bail!("`namcap {path}` exited with {}:\n{combined}", output.status);
+    }
+    Ok(())
+}
+
+fn files_with_extension(dir: &Path, ext: &str) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("failed to read {}", dir.display()))?;
+        let path = entry.path();
+        if path.extension().is_some_and(|found| found == ext) {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// `namcap` prints `E:` and `W:` as their own words. Warnings fail the check.
+/// A PKGBUILD `parsepkgbuild` rejected is an error line with neither tag.
+fn report_has_findings(text: &str) -> bool {
+    text.lines().any(|line| {
+        line.split_whitespace()
+            .any(|word| word == "E:" || word == "W:")
+            || line.contains("not a valid PKGBUILD")
+            || line.starts_with("Error:")
+    })
 }
 
 /// Replaces an `ExecStart=` program that `runnable` rejects with `stand_in`.
@@ -279,5 +342,100 @@ ExecReload=/usr/bin/kill -HUP $MAINPID
             return;
         }
         check(&workspace::root().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn namcap_warnings_and_errors_are_findings() {
+        assert!(super::report_has_findings("PKGBUILD E: missing license"));
+        assert!(super::report_has_findings(
+            "stillwatch W: unused dependency"
+        ));
+        assert!(super::report_has_findings(
+            "Error: packaging/arch/PKGBUILD is not a valid PKGBUILD"
+        ));
+        assert!(!super::report_has_findings(
+            "PKGBUILD (stillwatch) I: missing contributor\n"
+        ));
+    }
+
+    #[test]
+    fn example_hooks_document_the_environment_and_are_not_active() {
+        let root = workspace::root().unwrap();
+        let scripts = super::files_with_extension(&root.join("packaging/hooks"), "sh").unwrap();
+        let names: Vec<_> = scripts
+            .iter()
+            .filter_map(|path| path.file_name().and_then(|name| name.to_str()))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "cec-on.sh",
+                "cec-standby.sh",
+                "lg-webos-off.sh",
+                "lg-webos-on.sh",
+                "panel-care-trigger.sh",
+            ]
+        );
+        for path in &scripts {
+            let text = std::fs::read_to_string(path).unwrap();
+            for var in [
+                "STILLWATCH_OUTPUTS",
+                "STILLWATCH_METHOD",
+                "STILLWATCH_REASON",
+            ] {
+                assert!(text.contains(var), "{} missing {var}", path.display());
+            }
+            assert!(
+                text.contains("Not wired up by install"),
+                "{}",
+                path.display()
+            );
+        }
+        let trigger =
+            std::fs::read_to_string(root.join("packaging/hooks/panel-care-trigger.sh")).unwrap();
+        assert!(trigger.contains("undocumented vendor codes"));
+        let unit = std::fs::read_to_string(root.join("packaging/stillwatch.service")).unwrap();
+        assert!(!unit.contains("packaging/hooks"));
+    }
+
+    #[test]
+    fn pkgbuild_matches_the_workspace_and_stays_offline() {
+        let root = workspace::root().unwrap();
+        let cargo = std::fs::read_to_string(root.join("Cargo.toml")).unwrap();
+        let version = workspace_version(&cargo).unwrap();
+        let pkgbuild = include_str!("../../packaging/arch/PKGBUILD");
+        assert!(pkgbuild.contains(&format!("pkgver={version}")), "{version}");
+        for needle in [
+            "cargo fetch --locked",
+            "cargo build --release --offline --locked",
+            "depends=(kscreen dbus pipewire xdg-desktop-portal)",
+            "ddcutil:",
+            "kdialog:",
+            "/usr/bin/stillwatchd",
+            "/usr/lib/systemd/user/stillwatch.service",
+            "io.github.jslay88.Stillwatch.Daemon.desktop",
+            "LICENSE-MIT",
+            "LICENSE-APACHE",
+            "/usr/share/doc/stillwatch/hooks/",
+        ] {
+            assert!(pkgbuild.contains(needle), "missing {needle}");
+        }
+        assert!(
+            !pkgbuild.contains("systemctl"),
+            "the package must not enable the unit"
+        );
+    }
+
+    fn workspace_version(cargo: &str) -> Option<&str> {
+        let mut in_package = false;
+        for line in cargo.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_package = trimmed == "[workspace.package]";
+            } else if in_package && let Some(value) = trimmed.strip_prefix("version = ") {
+                return Some(value.trim_matches('"'));
+            }
+        }
+        None
     }
 }

@@ -25,7 +25,7 @@ pub enum Gate {
     Machete,
     /// Tests under `cargo llvm-cov nextest` plus coverage thresholds, see [`coverage`].
     Coverage,
-    /// The systemd unit and desktop files, when the checkers are installed.
+    /// The systemd unit, desktop files, example hooks, and PKGBUILD.
     Packaging,
     /// Builds the benchmarks without running them.
     Bench,
