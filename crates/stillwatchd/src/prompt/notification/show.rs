@@ -40,13 +40,21 @@ impl Prompt<'_> {
 
         let mut countdown = Countdown::new(request.countdown);
         let mut message = Message::prompt(request, countdown.remaining(), self.urgency);
+        // Arm before Notify. The server can leave as soon as the notification
+        // is visible, and a watch started after send misses that release.
+        let conn = proxy.inner().connection().clone();
+        let mut vanished =
+            crate::peer::NameWatch::arm(&conn, "org.freedesktop.Notifications").await?;
+        if vanished.owner().is_none() {
+            return Err(BackendError::Disconnected(
+                "notification server vanished".into(),
+            ));
+        }
         let mut id = message.send(proxy, 0).await.map_err(unavailable)?;
         let guard = self.open.track(proxy.clone(), id);
         let mut updates = interval_at(Instant::now() + self.tick, self.tick);
         let mut counting = true;
-        let conn = proxy.inner().connection().clone();
-        let vanished = crate::peer::until_replaced(&conn, "org.freedesktop.Notifications");
-        tokio::pin!(vanished);
+        let mut vanished = std::pin::pin!(vanished.until_changed());
         loop {
             tokio::select! {
                 signal = invoked.next() => {

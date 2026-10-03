@@ -1,7 +1,7 @@
 //! `KwinCapture` against the shared headless `KWin` harness, including
-//! `.desktop` authorization. In CI, `KWin` uses its software renderer and
-//! `ScreenShot2` answers `Cancelled` instead of a frame; the test still
-//! checks that an authorized caller is not refused.
+//! `.desktop` authorization. An authorized caller gets a frame whose size
+//! matches `KwinOptions`. That needs OpenGL compositing (`vgem` plus llvmpipe
+//! when the machine has no GPU).
 
 use std::time::Duration;
 
@@ -27,7 +27,11 @@ async fn screenshot2_needs_the_desktop_file_and_returns_the_output_size() {
     assert!(matches!(err, BackendError::PermissionDenied(_)), "{err}");
     drop(denied);
 
+    let width = 1920u32;
+    let height = 1080u32;
     let Some(kwin) = Kwin::start(KwinOptions {
+        width,
+        height,
         authorize: vec![Authorization::current_exe(&[SCREENSHOT2]).unwrap()],
         ..KwinOptions::default()
     })
@@ -45,22 +49,9 @@ async fn screenshot2_needs_the_desktop_file_and_returns_the_output_size() {
     let outputs = capture.outputs().await.unwrap();
     let output = outputs.first().expect("Virtual-0");
     assert_eq!(output.name, "Virtual-0");
-    assert_eq!((output.width, output.height), (1920, 1080));
+    assert_eq!((output.width, output.height), (width, height));
 
-    match capture.capture(&output.name, 480).await {
-        Ok(result) => {
-            assert_eq!(
-                (result.meta.width, result.meta.height),
-                (output.width, output.height)
-            );
-            assert_eq!(result.grid.width(), output.width.min(480));
-        }
-        Err(error) => {
-            let text = error.to_string();
-            assert!(
-                text.contains("Cancelled") || text.contains("couldn't render"),
-                "authorized capture failed for a reason other than no GPU: {error}"
-            );
-        }
-    }
+    let result = capture.capture(&output.name, 480).await.unwrap();
+    assert_eq!((result.meta.width, result.meta.height), (width, height));
+    assert_eq!(result.grid.width(), width.min(480));
 }
