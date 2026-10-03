@@ -412,14 +412,14 @@ What happens when the prompt times out, plus hooks and the re-blank watchdog.
 
 ### `action.on_blank_cmd`
 
-**After blanking.** Command run after the displays are blanked, such as a TV screen-off utility.
+**After blanking.** Command run after the displays are blanked, such as a TV screen-off utility. Runs as `sh -c` with a 10s timeout. `STILLWATCH_OUTPUTS`, `STILLWATCH_METHOD`, and `STILLWATCH_REASON` are set. Failures are logged and never block.
 
 - Type: command
 - Default: `""`
 
 ### `action.on_resume_cmd`
 
-**On resume.** Command run when the displays wake.
+**On resume.** Command run when the displays wake. Same `sh -c` timeout and environment as `on_blank_cmd` (`STILLWATCH_REASON=resume`).
 
 - Type: command
 - Default: `""`

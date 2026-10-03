@@ -146,13 +146,16 @@ pub(super) const SECTION: Section = Section {
             "action.on_blank_cmd",
             "After blanking",
             Control::Command,
-            "Command run after the displays are blanked, such as a TV screen-off utility.",
+            "Command run after the displays are blanked, such as a TV screen-off utility. \
+             Runs as `sh -c` with a 10s timeout. `STILLWATCH_OUTPUTS`, `STILLWATCH_METHOD`, \
+             and `STILLWATCH_REASON` are set. Failures are logged and never block.",
         ),
         Setting::new(
             "action.on_resume_cmd",
             "On resume",
             Control::Command,
-            "Command run when the displays wake.",
+            "Command run when the displays wake. Same `sh -c` timeout and environment as \
+             `on_blank_cmd` (`STILLWATCH_REASON=resume`).",
         ),
         Setting::new(
             "action.reblank_on_wake",
