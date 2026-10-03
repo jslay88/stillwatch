@@ -6,6 +6,7 @@
 //! Reading the file is left to the caller (`stillwatch_ipc::config_file`).
 
 mod error;
+pub mod limits;
 mod load;
 mod migrate;
 mod sections;
@@ -14,6 +15,7 @@ mod validate;
 use serde::{Deserialize, Serialize};
 
 pub use error::ConfigError;
+pub use limits::Bounds;
 pub use load::LoadOutcome;
 pub use migrate::{MIGRATIONS, MigrationNote, MigrationStep, migrate, rename_key};
 pub use sections::{

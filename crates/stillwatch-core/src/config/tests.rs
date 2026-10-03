@@ -331,3 +331,19 @@ fn media_ignore_matches_players_and_their_instances() {
     assert!(!stale.media_playing(&["spotify".into()]));
     assert!(stale.media_playing(&["spotify".into(), "mpv".into()]));
 }
+
+#[test]
+fn keyed_issues_cover_parse_and_validation_errors() {
+    let parse_error = Config::from_toml_str("[stale]\nrequire = \"most\"\n").unwrap_err();
+    let issues = parse_error.keyed_issues();
+    assert_eq!(issues.len(), 1);
+    assert_eq!(issues[0].key, "stale.require");
+
+    let invalid = Config::from_toml_str("[stale]\nstale_percent = 0\n[history]\nmax_entries = 0\n")
+        .unwrap_err();
+    let keys: Vec<_> = invalid.keyed_issues().into_iter().map(|i| i.key).collect();
+    assert_eq!(keys, ["stale.stale_percent", "history.max_entries"]);
+
+    let too_new = Config::from_toml_str("version = 99\n").unwrap_err();
+    assert_eq!(too_new.keyed_issues(), []);
+}

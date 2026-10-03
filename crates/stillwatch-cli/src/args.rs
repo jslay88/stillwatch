@@ -112,7 +112,7 @@ pub struct ConfigInitArgs {
     pub force: bool,
 
     /// Where to write [default: `$XDG_CONFIG_HOME/stillwatch/config.toml`]
-    #[arg(long, value_name = "PATH")]
+    #[arg(value_name = "PATH")]
     pub path: Option<PathBuf>,
 }
 

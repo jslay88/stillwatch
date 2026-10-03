@@ -40,6 +40,9 @@ jobs:
       - name: check-size
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: cargo xtask check-size
+      - name: docs/config.md up to date
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: cargo xtask gen-docs --check
       - name: jscpd
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: cargo xtask gate jscpd --strict

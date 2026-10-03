@@ -1221,7 +1221,9 @@ dependencies = [
  "anyhow",
  "clap",
  "humantime",
+ "stillwatch-core",
  "stillwatch-ipc",
+ "tempfile",
  "tracing",
 ]
 
@@ -1868,6 +1870,7 @@ dependencies = [
  "proc-macro2",
  "serde",
  "serde_json",
+ "stillwatch-core",
  "syn 2.0.119",
  "tempfile",
  "walkdir",

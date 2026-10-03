@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::limits::{Bounds, POSITIVE};
 use crate::config::validate::Issues;
 
 /// How the prompt is shown.
@@ -72,8 +73,12 @@ impl Default for PromptConfig {
 
 impl PromptConfig {
     pub(crate) fn validate(&self, issues: &mut Issues) {
-        issues.at_least("prompt.countdown_seconds", self.countdown_seconds, 1);
-        issues.at_least("prompt.custom_min_minutes", self.custom_min_minutes, 1);
+        issues.range("prompt.countdown_seconds", self.countdown_seconds, POSITIVE);
+        issues.range(
+            "prompt.custom_min_minutes",
+            self.custom_min_minutes,
+            POSITIVE,
+        );
         if self.snooze_presets_minutes.is_empty() && !self.allow_custom {
             issues.push(
                 "prompt.snooze_presets_minutes",
@@ -92,7 +97,7 @@ impl PromptConfig {
             issues.range(
                 &format!("prompt.snooze_presets_minutes[{index}]"),
                 *preset,
-                min..=max,
+                Bounds::new(min, max),
             );
         }
     }

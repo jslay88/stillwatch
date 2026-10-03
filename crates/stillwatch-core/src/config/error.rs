@@ -72,6 +72,25 @@ pub enum ConfigError {
     Serialize(#[from] toml::ser::Error),
 }
 
+impl ConfigError {
+    /// The problems tied to a specific key: every broken rule for
+    /// [`ConfigError::Invalid`], the offending key for [`ConfigError::Parse`].
+    ///
+    /// Empty for errors about the file as a whole (missing, unreadable, bad
+    /// TOML syntax, unsupported version).
+    #[must_use]
+    pub fn keyed_issues(&self) -> Vec<ValidationIssue> {
+        match self {
+            Self::Invalid(issues) => issues.clone(),
+            Self::Parse { key, message } => vec![ValidationIssue {
+                key: key.clone(),
+                message: message.clone(),
+            }],
+            _ => Vec::new(),
+        }
+    }
+}
+
 fn issue_list(issues: &[ValidationIssue]) -> String {
     issues.iter().fold(String::new(), |mut list, issue| {
         let _ = write!(list, "\n  {issue}");

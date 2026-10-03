@@ -1,9 +1,8 @@
 //! Validation that reports every problem at once, each keyed by its dotted path.
 
 use std::fmt;
-use std::ops::RangeInclusive;
 
-use super::{CURRENT_VERSION, Config};
+use super::{Bounds, CURRENT_VERSION, Config};
 
 /// One validation problem, keyed by the dotted path of the offending setting.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,23 +31,16 @@ impl Issues {
         });
     }
 
-    pub(crate) fn range(&mut self, key: &str, value: u32, range: RangeInclusive<u32>) {
-        if !range.contains(&value) {
-            self.push(
-                key,
-                format!(
-                    "must be between {} and {}, got {value}",
-                    range.start(),
-                    range.end()
-                ),
-            );
+    pub(crate) fn range(&mut self, key: &str, value: u32, bounds: Bounds) {
+        if bounds.contains(value) {
+            return;
         }
-    }
-
-    pub(crate) fn at_least(&mut self, key: &str, value: u32, min: u32) {
-        if value < min {
-            self.push(key, format!("must be at least {min}, got {value}"));
-        }
+        let min = bounds.min;
+        let message = match bounds.upper() {
+            Some(max) => format!("must be between {min} and {max}, got {value}"),
+            None => format!("must be at least {min}, got {value}"),
+        };
+        self.push(key, message);
     }
 
     pub(crate) fn not_blank(&mut self, key: &str, value: &str) {

@@ -6,6 +6,7 @@
 mod ci;
 mod coverage;
 mod gate;
+mod gen_docs;
 mod hooks;
 mod process;
 mod size;
@@ -56,6 +57,12 @@ enum Command {
     Coverage,
     /// Point `core.hooksPath` at `.githooks` so the pre-commit hook runs.
     InstallHooks,
+    /// Regenerate `docs/config.md` from the settings schema.
+    GenDocs {
+        /// Fail if the committed file is out of date instead of rewriting it.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -69,6 +76,7 @@ fn main() -> Result<()> {
         Command::CheckSize { max } => size::check(&root, max),
         Command::Coverage => coverage::run(&root),
         Command::InstallHooks => hooks::install(&root),
+        Command::GenDocs { check } => gen_docs::run(&root, check),
     }
 }
 

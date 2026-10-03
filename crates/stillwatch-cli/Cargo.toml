@@ -17,8 +17,12 @@ path = "src/main.rs"
 anyhow.workspace = true
 clap.workspace = true
 humantime.workspace = true
+stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

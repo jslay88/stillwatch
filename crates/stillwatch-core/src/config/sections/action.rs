@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 pub use crate::command::BlankMethod;
+use crate::config::limits::PERCENT;
 use crate::config::validate::Issues;
 
 /// The action taken when the prompt times out.
@@ -107,7 +108,7 @@ impl Default for ActionConfig {
 
 impl ActionConfig {
     pub(crate) fn validate(&self, issues: &mut Issues) {
-        issues.range("action.dim_percent", self.dim_percent, 0..=100);
+        issues.range("action.dim_percent", self.dim_percent, PERCENT);
         if self.mode == ActionMode::Command {
             issues.not_blank("action.command", &self.command);
         }
