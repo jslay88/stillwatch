@@ -5,7 +5,7 @@
 #
 # The runner kernel ships vgem in linux-modules-extra, which isn't installed.
 # It's installed and loaded on the host through the mounted docker socket. The
-# container needs --device-cgroup-rule='c 226:* rmw' to open the node.
+# container needs --device-cgroup-rule="c 226:* rmw" to open the node.
 set -eu
 
 pacman -S --noconfirm --needed docker >/dev/null

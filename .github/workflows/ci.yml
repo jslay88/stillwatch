@@ -64,7 +64,7 @@ jobs:
       # kwin_wayland has the cap_sys_nice file capability; exec fails with EPERM
       # when the container's bounding set lacks it.
       # The device rule lets KWin open the vgem node (DRM major 226) made below.
-      options: --cap-add=SYS_NICE --device-cgroup-rule='c 226:* rmw'
+      options: --cap-add=SYS_NICE --device-cgroup-rule="c 226:* rmw"
     env:
       # Private-bus D-Bus tests fail instead of skipping when dbus-daemon is missing.
       STILLWATCH_REQUIRE_DBUS: "1"
