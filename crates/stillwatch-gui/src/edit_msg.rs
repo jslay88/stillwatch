@@ -45,7 +45,7 @@ pub enum PresetKind {
     OledTvOverlay,
     /// DPMS plus example TV power hooks.
     OledTvHooks,
-    /// Watch the outputs the user marks as OLED.
+    /// Watch the outputs the user marks as OLED and blank them with the overlay.
     Mixed,
     /// Leave every key as it is.
     Custom,

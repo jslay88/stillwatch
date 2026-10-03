@@ -538,6 +538,30 @@ when_locked = \"pause\"
 }
 
 #[test]
+fn dpms_help_says_partial_targets_use_the_overlay() {
+    let setting = schema::find("action.blank_method").unwrap();
+    assert!(
+        setting
+            .help
+            .contains("partial DPMS becomes an overlay blank"),
+        "{}",
+        setting.help
+    );
+    let dpms = setting
+        .control
+        .choices()
+        .unwrap()
+        .iter()
+        .find(|choice| choice.value == "dpms")
+        .unwrap();
+    assert!(
+        dpms.help.contains("blanked with the overlay"),
+        "{}",
+        dpms.help
+    );
+}
+
+#[test]
 fn overlay_help_says_the_panel_stays_on() {
     let setting = schema::find("action.blank_method").unwrap();
     let overlay = setting

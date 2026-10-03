@@ -359,12 +359,12 @@ What happens when the prompt times out, plus hooks and the re-blank watchdog.
 
 ### `action.blank_method`
 
-**Blank method.** How displays are blanked. Prefer a method that reaches real standby, so the panel's own care cycle can run.
+**Blank method.** How displays are blanked. Prefer a method that reaches real standby, so the panel's own care cycle can run. On KWin, partial DPMS becomes an overlay blank of the targets.
 
 - Type: choice
 - Default: `"dpms"`
 - Values:
-  - `dpms`: Turn the signal off through the compositor. The panel reaches standby, so its own compensation cycle (Pixel Cleaning on some monitors) can run.
+  - `dpms`: Turn the signal off through the compositor. The panel reaches standby, so its own compensation cycle (Pixel Cleaning on some monitors) can run. KWin applies DPMS to every output. A partial target list is blanked with the overlay instead.
   - `overlay`: Cover each output with a black surface. Works everywhere and keeps the signal alive for TVs, but keeps the panel on and blocks panel compensation.
   - `ddc_standby`: Send the standard MCCS power mode command (VCP 0xD6) over DDC/CI. Real standby on monitors that support it.
 

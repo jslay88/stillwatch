@@ -8,7 +8,7 @@ use crate::edit_msg::{PresetKind, SettingsMsg};
 use super::catalog::Catalog;
 use super::editor::Editor;
 use super::pickers::{self, NOT_CONNECTED};
-use super::presets::{self, OLED_TV_BLANK_HOOK, OLED_TV_RESUME_HOOK};
+use super::presets::{self, MIXED_HELP, OLED_TV_BLANK_HOOK, OLED_TV_RESUME_HOOK};
 
 /// Preset buttons, the review diff, and the mixed-output prompt.
 #[must_use]
@@ -29,6 +29,7 @@ pub fn block<'a>(editor: &'a Editor, devices: &'a Catalog) -> Element<'a, Settin
     };
     if draft.kind == PresetKind::Mixed {
         body = body.push(text("Which outputs are OLED?").size(16));
+        body = body.push(text(MIXED_HELP).size(12));
         body = body.push(mixed(draft, devices));
     }
     if draft.kind == PresetKind::OledTvHooks {

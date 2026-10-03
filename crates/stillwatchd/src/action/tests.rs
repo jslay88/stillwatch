@@ -441,14 +441,11 @@ async fn outputs_list_is_respected() {
     });
     assert_eq!(f.runner.targets(), ["HDMI-A-1"]);
     assert_eq!(
-        f.blank_named(vec!["HDMI-A-1".into()], BlankMethod::Dpms)
+        f.blank_named(vec!["HDMI-A-1".into()], BlankMethod::DdcStandby)
             .await,
         Event::ActionCompleted
     );
-    assert_eq!(
-        f.dpms.calls(),
-        [BlankerCall::Blank(vec!["HDMI-A-1".into()])]
-    );
+    assert_eq!(f.ddc.calls(), [BlankerCall::Blank(vec!["HDMI-A-1".into()])]);
 
     let f = Fixture::new(|c| {
         c.action.outputs = ActionOutputs::All;
@@ -463,6 +460,90 @@ async fn outputs_list_is_respected() {
 
     let f = Fixture::with(Config::default(), vec!["HDMI-A-1".into()]);
     assert_eq!(f.runner.targets(), ["HDMI-A-1"]);
+}
+
+#[tokio::test]
+async fn partial_dpms_blanks_the_targets_with_the_overlay() {
+    let f = Fixture::new(|c| {
+        c.action.outputs = ActionOutputs::Monitored;
+        c.stale.monitored_outputs = vec!["HDMI-A-1".into()];
+    });
+    let targets = vec!["HDMI-A-1".to_owned()];
+    assert_eq!(f.blank(BlankMethod::Dpms).await, Event::ActionCompleted);
+    assert_eq!(f.dpms.calls(), []);
+    assert_eq!(f.overlay.calls(), [BlankerCall::Blank(targets)]);
+    assert_eq!(f.history.entries().len(), 1);
+    assert_eq!(f.history.entries()[0].kind, HistoryKind::OverlayUsed);
+    assert_eq!(
+        f.history.entries()[0].blank_method,
+        Some(BlankMethod::Overlay)
+    );
+}
+
+#[tokio::test]
+async fn partial_dpms_does_not_call_dpms_when_the_overlay_fails() {
+    let f = Fixture::new(|c| {
+        c.stale.monitored_outputs = vec!["HDMI-A-1".into()];
+    });
+    f.overlay
+        .fail_next(BackendError::Unsupported("no layer shell".into()));
+    assert!(matches!(
+        f.blank(BlankMethod::Dpms).await,
+        Event::ActionFailed {
+            error: BackendError::Unsupported(_)
+        }
+    ));
+    assert_eq!(f.dpms.calls(), []);
+    assert_eq!(f.history.entries(), []);
+}
+
+#[tokio::test]
+async fn dpms_still_runs_when_every_connected_output_is_targeted() {
+    let f = Fixture::new(|c| {
+        c.stale.monitored_outputs = vec!["DP-1".into(), "HDMI-A-1".into()];
+    });
+    let targets = vec!["DP-1".to_owned(), "HDMI-A-1".to_owned()];
+    assert_eq!(
+        f.blank_named(targets.clone(), BlankMethod::Dpms).await,
+        Event::ActionCompleted
+    );
+    assert_eq!(f.dpms.calls(), [BlankerCall::Blank(targets)]);
+    assert_eq!(f.overlay.calls(), []);
+    assert_eq!(f.history.entries(), []);
+
+    let f = Fixture::with(Config::default(), vec!["HDMI-A-1".into()]);
+    assert_eq!(f.blank(BlankMethod::Dpms).await, Event::ActionCompleted);
+    assert_eq!(
+        f.dpms.calls(),
+        [BlankerCall::Blank(vec!["HDMI-A-1".into()])]
+    );
+    assert_eq!(f.history.entries(), []);
+}
+
+#[tokio::test]
+async fn dpms_runs_when_a_target_is_not_connected() {
+    let f = Fixture::new(|c| {
+        c.stale.monitored_outputs = vec!["HDMI-A-9".into()];
+    });
+    assert_eq!(f.blank(BlankMethod::Dpms).await, Event::ActionCompleted);
+    assert_eq!(
+        f.dpms.calls(),
+        [BlankerCall::Blank(vec!["HDMI-A-9".into()])]
+    );
+    assert_eq!(f.overlay.calls(), []);
+}
+
+#[tokio::test]
+async fn dpms_runs_when_connected_outputs_are_unknown() {
+    let mut config = Config::default();
+    config.stale.monitored_outputs = vec!["HDMI-A-1".into()];
+    let f = Fixture::with(config, Vec::new());
+    assert_eq!(f.blank(BlankMethod::Dpms).await, Event::ActionCompleted);
+    assert_eq!(
+        f.dpms.calls(),
+        [BlankerCall::Blank(vec!["HDMI-A-1".into()])]
+    );
+    assert_eq!(f.overlay.calls(), []);
 }
 
 #[tokio::test]

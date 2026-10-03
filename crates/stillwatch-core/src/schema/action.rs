@@ -31,7 +31,8 @@ const BLANK_METHODS: &[Choice] = &[
         value: "dpms",
         label: "DPMS (signal off)",
         help: "Turn the signal off through the compositor. The panel reaches standby, so its \
-               own compensation cycle (Pixel Cleaning on some monitors) can run.",
+               own compensation cycle (Pixel Cleaning on some monitors) can run. KWin applies \
+               DPMS to every output. A partial target list is blanked with the overlay instead.",
     },
     Choice {
         value: "overlay",
@@ -105,7 +106,8 @@ pub(super) const SECTION: Section = Section {
                 choices: BLANK_METHODS,
             },
             "How displays are blanked. Prefer a method that reaches real standby, so the \
-             panel's own care cycle can run.",
+             panel's own care cycle can run. On KWin, partial DPMS becomes an overlay blank \
+             of the targets.",
         ),
         Setting::new(
             "action.outputs",
