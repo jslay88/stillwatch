@@ -100,9 +100,14 @@ rm -f "$statusfile"
     printf 'export LANG=%q\n' "${LANG:-C.UTF-8}"
 } >"$envfile"
 
-sock=$root/target/guest-vfs.sock
+# /tmp, not the workspace: virtiofsd unlinks the socket if it exits during
+# setup, and some CI mounts reject a unix socket under the checkout.
+sock=/tmp/stillwatch-guest-vfs.sock
 rm -f "$sock"
-virtiofsd --sandbox none --socket-path "$sock" --shared-dir / --inode-file-handles=never \
+# Container defaults kill this before the socket stays up: seccomp install,
+# raising RLIMIT_NOFILE, and walking every mount under --shared-dir /.
+virtiofsd --sandbox none --seccomp none --rlimit-nofile=0 --no-announce-submounts \
+    --socket-path "$sock" --shared-dir / --inode-file-handles=never \
     >target/guest-virtiofsd.log 2>&1 &
 vfs_pid=$!
 cleanup() {
@@ -117,11 +122,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
+show_virtiofsd_log() {
+    echo "coverage-guest: virtiofsd log:" >&2
+    cat target/guest-virtiofsd.log >&2 || true
+}
+
 for _ in $(seq 1 100); do
     [[ -S $sock ]] && break
+    if ! kill -0 "$vfs_pid" 2>/dev/null; then
+        show_virtiofsd_log
+        die "virtiofsd exited before creating $sock"
+    fi
     sleep 0.1
 done
-[[ -S $sock ]] || die "virtiofsd did not create $sock (see target/guest-virtiofsd.log)"
+if [[ ! -S $sock ]]; then
+    show_virtiofsd_log
+    die "virtiofsd did not create $sock"
+fi
 
 mem_kib=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
 guest_mib=$((mem_kib / 1024 - 2048))
