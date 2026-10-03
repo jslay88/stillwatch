@@ -7,6 +7,8 @@ use stillwatch_core::schema::{Control, Setting};
 
 use crate::edit_msg::{FieldChange, RegionPart, SettingsMsg};
 
+use super::catalog::Catalog;
+use super::pickers::NOT_CONNECTED;
 use super::values::{self, FieldError, FieldValue, RegionInput};
 
 /// The control for `setting`, plus its help, allowed values, and errors.
@@ -16,9 +18,17 @@ pub fn widget<'a>(
     field: &'a FieldValue,
     draft: &'a str,
     issues: &[FieldError],
+    devices: &'a Catalog,
 ) -> Element<'a, SettingsMsg> {
-    let mut body = column![text(setting.label).size(16), control(setting, field, draft)].spacing(4);
+    let mut body = column![
+        text(setting.label).size(16),
+        control(setting, field, draft, devices)
+    ]
+    .spacing(4);
     body = body.push(text(setting.help).size(12));
+    if let Some(note) = choice_note(setting, field) {
+        body = body.push(text(note).size(12));
+    }
     if let Some(allowed) = setting.control.allowed() {
         body = body.push(text(allowed_line(&setting.control, &allowed)).size(12));
     }
@@ -40,10 +50,32 @@ fn allowed_line(control: &Control, allowed: &str) -> String {
     }
 }
 
+/// The selected enum choice's help, when it adds something past the setting help.
+#[must_use]
+pub fn choice_note<'a>(setting: &'a Setting, field: &'a FieldValue) -> Option<&'a str> {
+    let Control::Enum { choices } = &setting.control else {
+        return None;
+    };
+    let FieldValue::Text(value) = field else {
+        return None;
+    };
+    choices
+        .iter()
+        .find(|choice| choice.value == value)
+        .and_then(|choice| {
+            if choice.help == setting.help {
+                None
+            } else {
+                Some(choice.help)
+            }
+        })
+}
+
 fn control<'a>(
     setting: &'a Setting,
     field: &'a FieldValue,
     draft: &'a str,
+    devices: &'a Catalog,
 ) -> Element<'a, SettingsMsg> {
     let key = setting.key;
     match (&setting.control, field) {
@@ -67,16 +99,17 @@ fn control<'a>(
             FieldValue::Text(value),
         ) => number(key, value, *bounds, step_of(&setting.control)),
         (Control::Text | Control::Command, FieldValue::Text(value)) => text_row(key, value, ""),
+        (Control::StringList | Control::IntList { .. }, FieldValue::List(items)) => {
+            list_editor(key, items, draft)
+        }
         (
-            Control::StringList
-            | Control::OutputPicker
-            | Control::GamepadPicker
-            | Control::PlayerPicker
-            | Control::IntList { .. },
+            Control::OutputPicker | Control::GamepadPicker | Control::PlayerPicker,
             FieldValue::List(items),
-        ) => list_editor(key, items, draft),
+        ) => super::picker_view::control(key, &setting.control, items, draft, devices),
         (Control::GridSize { .. }, FieldValue::Grid { cols, rows }) => grid(key, cols, rows),
-        (Control::RegionEditor, FieldValue::Regions(regions)) => region_editor(key, regions),
+        (Control::RegionEditor, FieldValue::Regions(regions)) => {
+            region_editor(key, regions, devices)
+        }
         _ => text("This control doesn't match the saved value.").into(),
     }
 }
@@ -181,23 +214,28 @@ fn list_editor<'a>(key: &'a str, items: &'a [String], draft: &'a str) -> Element
             .spacing(8),
         );
     }
+    body = body.push(draft_row(key, draft));
+    body.into()
+}
+
+/// The add row shared by plain lists and the device pickers.
+#[must_use]
+pub(super) fn draft_row<'a>(key: &'a str, draft: &'a str) -> Element<'a, SettingsMsg> {
     let draft_key = key.to_owned();
     let push_key = key.to_owned();
-    body = body.push(
-        row![
-            text_input("Add", draft)
-                .on_input(move |value| {
-                    SettingsMsg::Edit(FieldChange::ListDraft {
-                        key: draft_key.clone(),
-                        value,
-                    })
+    row![
+        text_input("Add", draft)
+            .on_input(move |value| {
+                SettingsMsg::Edit(FieldChange::ListDraft {
+                    key: draft_key.clone(),
+                    value,
                 })
-                .width(Fill),
-            button("Add").on_press(SettingsMsg::Edit(FieldChange::ListPush { key: push_key })),
-        ]
-        .spacing(8),
-    );
-    body.into()
+            })
+            .width(Fill),
+        button("Add").on_press(SettingsMsg::Edit(FieldChange::ListPush { key: push_key })),
+    ]
+    .spacing(8)
+    .into()
 }
 
 fn grid<'a>(key: &'a str, cols: &'a str, rows: &'a str) -> Element<'a, SettingsMsg> {
@@ -231,10 +269,14 @@ fn grid<'a>(key: &'a str, cols: &'a str, rows: &'a str) -> Element<'a, SettingsM
     .into()
 }
 
-fn region_editor<'a>(key: &'a str, regions: &'a [RegionInput]) -> Element<'a, SettingsMsg> {
+fn region_editor<'a>(
+    key: &'a str,
+    regions: &'a [RegionInput],
+    devices: &'a Catalog,
+) -> Element<'a, SettingsMsg> {
     let mut body = column![].spacing(6);
     for (index, region) in regions.iter().enumerate() {
-        body = body.push(region_row(key, index, region));
+        body = body.push(region_row(key, index, region, devices));
     }
     body = body.push(
         button("Add region").on_press(SettingsMsg::Edit(FieldChange::RegionPush {
@@ -244,17 +286,15 @@ fn region_editor<'a>(key: &'a str, regions: &'a [RegionInput]) -> Element<'a, Se
     body.into()
 }
 
-fn region_row<'a>(key: &'a str, index: usize, region: &'a RegionInput) -> Element<'a, SettingsMsg> {
+fn region_row<'a>(
+    key: &'a str,
+    index: usize,
+    region: &'a RegionInput,
+    devices: &'a Catalog,
+) -> Element<'a, SettingsMsg> {
     let remove_key = key.to_owned();
     row![
-        region_input(
-            key,
-            index,
-            RegionPart::Output,
-            "output",
-            &region.output,
-            140.0
-        ),
+        region_output(key, index, region, devices),
         region_input(key, index, RegionPart::X, "x", &region.x, 64.0),
         region_input(key, index, RegionPart::Y, "y", &region.y, 64.0),
         region_input(key, index, RegionPart::W, "w", &region.w, 64.0),
@@ -266,6 +306,48 @@ fn region_row<'a>(key: &'a str, index: usize, region: &'a RegionInput) -> Elemen
     ]
     .spacing(6)
     .into()
+}
+
+fn region_output<'a>(
+    key: &'a str,
+    index: usize,
+    region: &'a RegionInput,
+    devices: &'a Catalog,
+) -> Element<'a, SettingsMsg> {
+    let mut body = column![region_input(
+        key,
+        index,
+        RegionPart::Output,
+        "output",
+        &region.output,
+        140.0
+    )]
+    .spacing(4);
+    if !devices.outputs.is_empty() {
+        let options = devices.outputs.clone();
+        let selected = options
+            .iter()
+            .find(|output| output.as_str() == region.output)
+            .cloned();
+        let key = key.to_owned();
+        body = body.push(pick_list(options, selected, move |value| {
+            SettingsMsg::Edit(FieldChange::Region {
+                key: key.clone(),
+                index,
+                field: RegionPart::Output,
+                value,
+            })
+        }));
+    }
+    if !region.output.is_empty()
+        && !devices
+            .outputs
+            .iter()
+            .any(|output| output == &region.output)
+    {
+        body = body.push(text(NOT_CONNECTED).size(12));
+    }
+    body.into()
 }
 
 fn region_input<'a>(

@@ -26,7 +26,7 @@ pub use sections::{
     ActionConfig, ActionMode, ActionOutputs, ActivityConfig, BlankMethod, CaptureBackend,
     CaptureConfig, DimMethod, HistoryConfig, IdleConfig, IgnoreRegion, LogLevel, LoggingConfig,
     PanelCareConfig, PromptConfig, PromptStyle, PromptUrgency, ReblankFallback, SafetyConfig,
-    SessionConfig, StaleConfig, StaleRequire, WhenLocked,
+    SessionConfig, StaleConfig, StaleRequire, WhenLocked, ignores_device_name,
 };
 pub use validate::ValidationIssue;
 

@@ -17,6 +17,61 @@ pub enum SettingsMsg {
     ConfirmRestore,
     /// The user dismissed the confirmation.
     CancelRestore,
+    /// Show the diff for a display preset. Nothing is written yet.
+    PreviewPreset(PresetKind),
+    /// Check or uncheck an output in the mixed OLED preset.
+    MixedToggle {
+        /// Connector name.
+        name: String,
+        /// Whether that output is OLED.
+        on: bool,
+    },
+    /// Free-text output for the mixed preset, not yet in the selection.
+    MixedDraft(String),
+    /// Append the mixed-preset add row to the selection.
+    MixedPush,
+    /// Write the reviewed preset through the normal save.
+    ApplyPreset,
+    /// Drop the preset diff without writing.
+    CancelPreset,
+}
+
+/// A starting point for a display setup. Custom changes nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetKind {
+    /// DPMS blank, re-blank on wake, overlay fallback.
+    OledMonitor,
+    /// Black overlay blank.
+    OledTvOverlay,
+    /// DPMS plus example TV power hooks.
+    OledTvHooks,
+    /// Watch the outputs the user marks as OLED.
+    Mixed,
+    /// Leave every key as it is.
+    Custom,
+}
+
+impl PresetKind {
+    /// Every preset, in the order the settings page shows them.
+    pub const ALL: [Self; 5] = [
+        Self::OledMonitor,
+        Self::OledTvOverlay,
+        Self::OledTvHooks,
+        Self::Mixed,
+        Self::Custom,
+    ];
+
+    /// Button label.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::OledMonitor => "OLED monitor",
+            Self::OledTvOverlay => "OLED TV, overlay",
+            Self::OledTvHooks => "OLED TV, DPMS + hooks",
+            Self::Mixed => "Mixed OLED + LCD",
+            Self::Custom => "Custom",
+        }
+    }
 }
 
 /// One control edit.
@@ -64,6 +119,13 @@ pub enum FieldChange {
         /// Index to remove.
         index: usize,
     },
+    /// Replace a whole list. Pickers send this when a checkbox changes.
+    ListSet {
+        /// Schema key.
+        key: String,
+        /// The list after the click.
+        items: Vec<String>,
+    },
     /// A `[cols, rows]` pair.
     Grid {
         /// Schema key.
@@ -109,6 +171,7 @@ impl FieldChange {
             | Self::ListDraft { key, .. }
             | Self::ListPush { key }
             | Self::ListRemove { key, .. }
+            | Self::ListSet { key, .. }
             | Self::Grid { key, .. }
             | Self::Region { key, .. }
             | Self::RegionPush { key }

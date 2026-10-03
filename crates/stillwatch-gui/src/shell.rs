@@ -9,7 +9,7 @@ use stillwatch_ipc::status::StatusPayload;
 use crate::edit_msg::SettingsMsg;
 use crate::launch::LaunchMode;
 use crate::page::Page;
-use crate::settings::Editor;
+use crate::settings::{Catalog, Editor};
 
 /// Whether a window is closed, open, or open and needing focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -111,6 +111,8 @@ pub enum DaemonEvent {
     Presets(Vec<u32>),
     /// A tray action's D-Bus call failed.
     CallFailed(String),
+    /// `Outputs()`, `Gamepads()`, and `Players()`.
+    Devices(Catalog),
 }
 
 /// A method the tray asked the daemon to run.
@@ -129,6 +131,8 @@ pub enum DaemonCall {
     Resume,
     /// `Reload()`. Skipped by the shell when the daemon is down.
     Reload,
+    /// `Outputs()`, `Gamepads()`, and `Players()`, for the settings pickers.
+    RefreshDevices,
 }
 
 /// A tray menu (or left-click) choice.
@@ -207,6 +211,8 @@ pub struct Shell {
     pub config_path: Option<PathBuf>,
     /// Settings form. Defaults until a file is loaded.
     pub editor: Editor,
+    /// Live outputs, gamepads, and players. Empty while the daemon is down.
+    pub devices: Catalog,
 }
 
 impl Shell {
@@ -225,6 +231,7 @@ impl Shell {
             quit: false,
             config_path: None,
             editor: Editor::pristine(),
+            devices: Catalog::default(),
         }
     }
 

@@ -9,7 +9,7 @@ mod prompt;
 pub use action::{
     ActionConfig, ActionMode, ActionOutputs, BlankMethod, DimMethod, ReblankFallback,
 };
-pub use activity::{ActivityConfig, IdleConfig, SessionConfig, WhenLocked};
+pub use activity::{ActivityConfig, IdleConfig, SessionConfig, WhenLocked, ignores_device_name};
 pub use detection::{
     CaptureBackend, CaptureConfig, IgnoreRegion, SafetyConfig, StaleConfig, StaleRequire,
 };

@@ -83,6 +83,15 @@ impl Default for ActivityConfig {
 }
 
 impl ActivityConfig {
+    /// Whether `name` contains any [`Self::gamepad_ignore_devices`] entry.
+    ///
+    /// Comparison is case-insensitive. Blank entries never match, so a drifting
+    /// pad is ignored only when its reported name actually contains a needle.
+    #[must_use]
+    pub fn ignores_device(&self, name: &str) -> bool {
+        ignores_device_name(&self.gamepad_ignore_devices, name)
+    }
+
     pub(crate) fn validate(&self, issues: &mut Issues) {
         issues.range(
             "activity.gamepad_deadzone_percent",
@@ -93,5 +102,35 @@ impl ActivityConfig {
             "activity.gamepad_ignore_devices",
             &self.gamepad_ignore_devices,
         );
+    }
+}
+
+/// Whether `name` contains any ignore entry, compared case-insensitively.
+///
+/// Blank entries never match. The daemon's hot path and the settings picker
+/// both use this so a selected gamepad is the same substring the source ignores.
+#[must_use]
+pub fn ignores_device_name(needles: &[impl AsRef<str>], name: &str) -> bool {
+    let folded = name.to_lowercase();
+    needles.iter().any(|needle| {
+        let needle = needle.as_ref().trim().to_lowercase();
+        !needle.is_empty() && folded.contains(&needle)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignore_entries_match_case_insensitive_substrings() {
+        let config = ActivityConfig {
+            gamepad_ignore_devices: vec!["Drifty".into(), " ".into()],
+            ..ActivityConfig::default()
+        };
+        assert!(config.ignores_device("8BitDo Drifty Pad"));
+        assert!(config.ignores_device("drifty pro"));
+        assert!(!config.ignores_device("stable pad"));
+        assert!(!ignores_device_name(&[" ".to_owned()], "stable pad"));
     }
 }

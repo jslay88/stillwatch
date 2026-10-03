@@ -29,10 +29,14 @@ mod windows;
 
 pub use args::Cli;
 pub use daemon::{dispatch, watch};
-pub use edit_msg::{FieldChange, RegionPart, RestoreScope, SettingsMsg};
+pub use edit_msg::{FieldChange, PresetKind, RegionPart, RestoreScope, SettingsMsg};
 pub use instance::{Claim, GUI_BUS_NAME, claim};
 pub use launch::LaunchMode;
 pub use model::update;
+pub use settings::{
+    Catalog, GamepadSeen, KeyChange, PickerRow, activity_lit, gamepad_rows, output_rows,
+    player_rows, player_value,
+};
 pub use shell::{DaemonCall, DaemonEvent, Link, Message, Shell, Snapshot, TrayAction, Visibility};
 
 use stillwatch_ipc::logging::{self, LogTarget};
