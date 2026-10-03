@@ -41,6 +41,13 @@ impl Step {
         Ok(())
     }
 
+    /// Runs the step in `cwd` and returns the raw output, including a failed exit.
+    pub fn captured(&self, cwd: &Path) -> Result<std::process::Output> {
+        self.command(cwd)
+            .output()
+            .with_context(|| format!("failed to start `{self}`"))
+    }
+
     /// Runs the step in `cwd` and returns its stdout, failing on a non-zero exit.
     pub fn output(&self, cwd: &Path) -> Result<String> {
         let output = self

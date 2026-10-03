@@ -42,7 +42,50 @@ fn verify_unit(root: &Path) -> Result<()> {
     let path = dir.path().join("stillwatch.service");
     fs::write(&path, &rendered).with_context(|| format!("failed to write {}", path.display()))?;
     let path = path_str(&path)?;
-    Step::new("systemd-analyze", ["verify", "--user", path]).run(root)
+    let user = analyze(root, &["verify", "--user", path])?;
+    if user.ok {
+        return Ok(());
+    }
+    if user_manager_unavailable(&user.stderr) {
+        eprintln!("no systemd user manager; verifying the unit with the system manager");
+        let system = analyze(root, &["verify", path])?;
+        if system.ok {
+            return Ok(());
+        }
+        bail!(
+            "`systemd-analyze verify {path}` exited with {}:\n{}",
+            system.status,
+            system.stderr
+        );
+    }
+    bail!(
+        "`systemd-analyze verify --user {path}` exited with {}:\n{}",
+        user.status,
+        user.stderr
+    );
+}
+
+struct Analyze {
+    ok: bool,
+    status: String,
+    stderr: String,
+}
+
+fn analyze(root: &Path, args: &[&str]) -> Result<Analyze> {
+    let step = Step::new("systemd-analyze", args.iter().copied());
+    eprintln!("+ {step}");
+    let output = step.captured(root)?;
+    Ok(Analyze {
+        ok: output.status.success(),
+        status: output.status.to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
+}
+
+/// `verify --user` needs a running user manager. GitHub's runners have the
+/// binary and no manager, which fails before the unit is read.
+fn user_manager_unavailable(stderr: &str) -> bool {
+    stderr.contains("Failed to initialize manager") || stderr.contains("Failed to connect to bus")
 }
 
 fn validate_desktops(root: &Path) -> Result<()> {
@@ -214,6 +257,19 @@ ExecReload=/usr/bin/kill -HUP $MAINPID
             "{daemon}"
         );
         assert!(daemon.contains("NoDisplay=true"), "{daemon}");
+    }
+
+    #[test]
+    fn a_missing_user_manager_is_not_a_unit_error() {
+        assert!(super::user_manager_unavailable(
+            "Failed to initialize manager: No such device or address"
+        ));
+        assert!(super::user_manager_unavailable(
+            "Failed to connect to bus: No medium found"
+        ));
+        assert!(!super::user_manager_unavailable(
+            "stillwatch.service: Service has no ExecStart="
+        ));
     }
 
     #[test]
