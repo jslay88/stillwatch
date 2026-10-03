@@ -1,11 +1,7 @@
 //! The `stillwatch` command-line tool.
 
-fn main() {}
+use clap::Parser as _;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn main_runs() {
-        super::main();
-    }
+fn main() -> anyhow::Result<()> {
+    stillwatch_cli::run(stillwatch_cli::Cli::parse())
 }

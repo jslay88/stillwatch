@@ -1,11 +1,8 @@
 //! The Stillwatch daemon.
 
-fn main() {}
+use clap::Parser as _;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn main_runs() {
-        super::main();
-    }
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    stillwatchd::run(stillwatchd::Args::parse()).await
 }
