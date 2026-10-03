@@ -1,8 +1,10 @@
 //! The daemon against a headless `kwin_wayland --virtual`.
 //!
-//! It has to come up, own the bus name, and report Active. The idle timeout
-//! stays at the default, so this never blanks the virtual outputs. The
-//! `Kwin` sandbox is killed on drop, and so is the daemon child.
+//! It has to come up, own the bus name, and report a status. The idle timeout
+//! stays at the default, so this never blanks the virtual outputs. A virtual
+//! `KWin` can answer `ScreenSaver.GetActive`, and logind is the host's, so
+//! the state may already be Locked. The `Kwin` sandbox is killed on drop,
+//! and so is the daemon child.
 
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -26,7 +28,7 @@ impl Drop for ChildGuard {
 }
 
 #[tokio::test]
-async fn starts_owns_the_bus_name_and_reports_active() {
+async fn starts_owns_the_bus_name_and_reports_status() {
     let Some(kwin) = Kwin::start(KwinOptions::default()).await.unwrap() else {
         return;
     };
@@ -48,7 +50,10 @@ async fn starts_owns_the_bus_name_and_reports_active() {
     let conn = kwin.bus().connect().await.unwrap();
     let proxy = StillwatchProxy::new(&conn).await.unwrap();
     let status = proxy.status().await.unwrap();
-    assert!(status.contains(r#""state":"active""#), "{status}");
+    assert!(
+        status.contains(r#""state":"active""#) || status.contains(r#""state":"locked""#),
+        "{status}"
+    );
 
     let signaled = Command::new("kill")
         .args(["-TERM", &child.id().to_string()])

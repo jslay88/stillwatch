@@ -20,7 +20,7 @@ impl<R: ReloadSignal> Engine<R> {
             }
         }
         if cancel_capture {
-            self.stop_capture();
+            self.stop_capture().await;
         }
     }
 
@@ -41,7 +41,7 @@ impl<R: ReloadSignal> Engine<R> {
                 outputs,
                 downscale_width,
             } => {
-                self.start_capture(outputs, downscale_width);
+                self.start_capture(outputs, downscale_width).await;
                 return true;
             }
             Command::ShowPrompt(request) => self.start_prompt(request),
@@ -61,14 +61,25 @@ impl<R: ReloadSignal> Engine<R> {
         false
     }
 
-    fn start_capture(&mut self, outputs: Vec<String>, width: u32) {
-        self.stop_capture();
-        let generation = self.capture_gen;
+    async fn start_capture(&mut self, outputs: Vec<String>, width: u32) {
+        self.stop_capture().await;
         let capture = super::shared::lock(&self.shared.capture).clone();
         let Some(capture) = capture else {
             self.capture_unavailable();
             return;
         };
+        let portal = super::shared::lock(&self.shared.portal).clone();
+        if let Some(portal) = portal {
+            if let Err(error) = portal.set_away().await {
+                tracing::warn!(%error, "couldn't start portal capture");
+                let _ = self
+                    .out
+                    .send(Incoming::Event(Event::CaptureFailed { error }));
+                return;
+            }
+            self.portal_away = true;
+        }
+        let generation = self.capture_gen;
         let out = self.out.clone();
         self.capture_task = Some(tokio::spawn(async move {
             let event = capture_outputs(capture, &outputs, width).await;
@@ -86,10 +97,20 @@ impl<R: ReloadSignal> Engine<R> {
         }));
     }
 
-    pub(super) fn stop_capture(&mut self) {
+    pub(super) async fn stop_capture(&mut self) {
         self.capture_gen = self.capture_gen.wrapping_add(1);
         if let Some(task) = self.capture_task.take() {
             task.abort();
+        }
+        if !self.portal_away {
+            return;
+        }
+        self.portal_away = false;
+        let portal = super::shared::lock(&self.shared.portal).clone();
+        if let Some(portal) = portal
+            && let Err(error) = portal.set_active().await
+        {
+            tracing::warn!(%error, "couldn't stop portal capture");
         }
     }
 

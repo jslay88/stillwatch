@@ -22,6 +22,8 @@ pub(super) struct Shared {
     pub capture_backend: Mutex<Option<String>>,
     /// The capture backend, if one connected.
     pub capture: Mutex<Option<Arc<dyn ScreenCapture>>>,
+    /// Portal session for the same backend, when `capture.backend` is portal.
+    pub portal: Mutex<Option<Arc<dyn super::parts::CaptureSession>>>,
     /// Gamepads for the picker. `None` when gamepad input is off.
     pub gamepad: Mutex<Option<Arc<dyn GamepadSource>>>,
     /// Players the media watcher last reported as `Playing`.
@@ -42,6 +44,7 @@ impl Shared {
             errors: Mutex::new(Vec::new()),
             capture_backend: Mutex::new(built.capture_backend.clone()),
             capture: Mutex::new(built.capture.clone()),
+            portal: Mutex::new(built.portal.clone()),
             gamepad: Mutex::new(built.gamepad.clone()),
             playing: Mutex::new(Vec::new()),
             media: Arc::clone(&built.media),
