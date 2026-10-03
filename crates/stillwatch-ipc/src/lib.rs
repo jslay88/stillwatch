@@ -3,7 +3,7 @@
 //! The daemon serves the `io.github.jslay88.Stillwatch1` interface at
 //! [`OBJECT_PATH`] under the well-known name [`BUS_NAME`]; the CLI and GUI use
 //! the proxy in [`proxy`]. Structured payloads travel as JSON strings of the
-//! types in [`status`], [`probe`], and [`gamepad`], built with [`json`].
+//! types in [`status`], [`probe`], [`gamepad`], and [`player`], built with [`json`].
 //! Process-level helpers shared by all three binaries (logging setup, standard
 //! paths, and reading the config file) live here too.
 
@@ -13,6 +13,7 @@ pub mod gamepad;
 pub mod json;
 pub mod logging;
 pub mod paths;
+pub mod player;
 pub mod probe;
 pub mod prompt;
 pub mod proxy;

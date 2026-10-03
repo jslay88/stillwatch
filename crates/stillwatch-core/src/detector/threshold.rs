@@ -1,15 +1,16 @@
 //! Picks the stale threshold: `stale_percent`, or `media_stale_percent` while
 //! a non-ignored MPRIS player is playing.
 
+use crate::backend::MediaPlayer;
 use crate::config::StaleConfig;
 use crate::stats::{Threshold, ThresholdReason};
 
-/// The threshold for a capture, given the names of every playing player.
+/// The threshold for a capture, given every playing player.
 ///
 /// Players are matched against `media_ignore_players` by
 /// [`StaleConfig::media_playing`]. `media_stale_percent = 0` disables the
 /// media threshold.
-pub(crate) fn select(stale: &StaleConfig, playing: &[String]) -> Threshold {
+pub(crate) fn select(stale: &StaleConfig, playing: &[MediaPlayer]) -> Threshold {
     let media = stale.media_stale_percent > 0 && stale.media_playing(playing);
     if media {
         Threshold::new(percent(stale.media_stale_percent), ThresholdReason::Media)
@@ -26,9 +27,10 @@ pub(crate) fn percent(value: u32) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::MediaPlayer;
 
-    fn playing(names: &[&str]) -> Vec<String> {
-        names.iter().map(|name| (*name).to_owned()).collect()
+    fn playing(names: &[&str]) -> Vec<MediaPlayer> {
+        names.iter().copied().map(MediaPlayer::named).collect()
     }
 
     #[test]
@@ -53,6 +55,26 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn an_ignored_identity_keeps_the_normal_threshold() {
+        let stale = StaleConfig {
+            media_ignore_players: vec!["VLC media player".into()],
+            ..StaleConfig::default()
+        };
+        let vlc = MediaPlayer::with_identity("vlc", "VLC media player");
+        assert_eq!(select(&stale, &[vlc]).reason, ThresholdReason::Normal);
+        let named = MediaPlayer::with_identity("firefox.instance_1_42", "Mozilla Firefox");
+        let by_suffix = StaleConfig {
+            media_ignore_players: vec!["firefox".into()],
+            ..StaleConfig::default()
+        };
+        assert_eq!(select(&by_suffix, &[named]).reason, ThresholdReason::Normal);
+        assert_eq!(
+            select(&stale, &[MediaPlayer::named("mpv")]).reason,
+            ThresholdReason::Media
+        );
     }
 
     #[test]

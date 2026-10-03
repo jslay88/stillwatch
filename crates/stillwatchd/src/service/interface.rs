@@ -13,6 +13,7 @@ use stillwatch_core::event::ControlCommand;
 use stillwatch_core::prompt::PromptOutcome;
 use stillwatch_ipc::gamepad::GamepadInfo;
 use stillwatch_ipc::json::{to_json, to_json_lines};
+use stillwatch_ipc::player::PlayerInfo;
 use stillwatch_ipc::probe::MIN_PROBE_INTERVAL_MS;
 use stillwatch_ipc::prompt::outcome_from_answer;
 use zbus::Connection;
@@ -133,8 +134,10 @@ impl Control {
         to_json(&pads).map_err(failed)
     }
 
-    async fn players(&self) -> Result<Vec<String>> {
-        self.handle.players().await.map_err(failed)
+    async fn players(&self) -> Result<String> {
+        let players = self.handle.players().await.map_err(failed)?;
+        let listed: Vec<PlayerInfo> = players.iter().map(PlayerInfo::from).collect();
+        to_json(&listed).map_err(failed)
     }
 
     #[zbus(signal)]

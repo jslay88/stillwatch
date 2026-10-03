@@ -7,12 +7,12 @@ use stillwatch_core::backend::BackendError;
 use zbus::fdo::DBusProxy;
 use zbus::message::Type;
 use zbus::proxy::CacheProperties;
-use zbus::zvariant::OwnedValue;
+use zbus::zvariant::{OwnedValue, Value};
 use zbus::{Connection, MatchRule};
 
 use super::players::{Player, PlayerSet};
 use super::properties::{
-    OBJECT_PATH, PLAYBACK_STATUS, PLAYER_INTERFACE, ROOT_INTERFACE, is_playing, player_name,
+    IDENTITY, OBJECT_PATH, PLAYBACK_STATUS, PLAYER_INTERFACE, ROOT_INTERFACE, player_name,
 };
 use crate::dbus::{self, Bus};
 
@@ -22,8 +22,9 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
 const PROPERTIES_INTERFACE: &str = "org.freedesktop.DBus.Properties";
 
-/// The arguments of the one `Get` call made to players.
+/// `Get` arguments for `PlaybackStatus` and the one-time `Identity` read.
 const STATUS_REQUEST: (&str, &str) = (PLAYER_INTERFACE, PLAYBACK_STATUS);
+const IDENTITY_REQUEST: (&str, &str) = (ROOT_INTERFACE, IDENTITY);
 
 /// Opens a new connection to `bus`.
 pub(crate) async fn connect(bus: &Bus) -> Result<Connection, BackendError> {
@@ -82,37 +83,57 @@ pub(crate) async fn discover(
     Ok(())
 }
 
-/// Reads a player's status. `None` if `bus_name` isn't an MPRIS name.
+/// Reads a player's name, `Identity`, and status. `None` if `bus_name` isn't
+/// an MPRIS name. `Identity` is read here and not again for this player.
 pub(crate) async fn describe(conn: &Connection, bus_name: &str, owner: &str) -> Option<Player> {
     let name = player_name(bus_name)?.to_owned();
     Some(Player {
         owner: owner.to_owned(),
         name,
+        identity: identity(conn, owner).await,
         playing: playing(conn, owner).await,
     })
+}
+
+/// `Identity` for the player owned by `owner`. Empty when it doesn't answer.
+pub(crate) async fn identity(conn: &Connection, owner: &str) -> String {
+    property(conn, owner, IDENTITY_REQUEST.0, IDENTITY_REQUEST.1)
+        .await
+        .unwrap_or_default()
 }
 
 /// Whether the player owned by `owner` reports `Playing`. A player that
 /// doesn't answer counts as not playing.
 pub(crate) async fn playing(conn: &Connection, owner: &str) -> bool {
+    property(conn, owner, STATUS_REQUEST.0, STATUS_REQUEST.1)
+        .await
+        .is_some_and(|status| status == "Playing")
+}
+
+/// One `Get` of a string property. Failures are logged without the value.
+async fn property(conn: &Connection, owner: &str, interface: &str, name: &str) -> Option<String> {
     let reply = conn
         .call_method(
             Some(owner),
             OBJECT_PATH,
             Some(PROPERTIES_INTERFACE),
             "Get",
-            &STATUS_REQUEST,
+            &(interface, name),
         )
         .await;
-    match reply {
-        Ok(reply) => reply
-            .body()
-            .deserialize::<OwnedValue>()
-            .is_ok_and(|status| is_playing(&status)),
+    let reply = match reply {
+        Ok(reply) => reply,
         Err(err) => {
-            tracing::debug!(owner, %err, "MPRIS PlaybackStatus read failed");
-            false
+            tracing::debug!(owner, interface, property = name, %err, "MPRIS property read failed");
+            return None;
         }
+    };
+    let Ok(value) = reply.body().deserialize::<OwnedValue>() else {
+        return None;
+    };
+    match &*value {
+        Value::Str(text) => Some(text.as_str().to_owned()),
+        _ => None,
     }
 }
 
@@ -145,11 +166,12 @@ mod tests {
     }
 
     #[test]
-    fn playback_status_is_the_only_property_requested() {
+    fn only_playback_status_and_identity_are_requested() {
         assert_eq!(
             STATUS_REQUEST,
             ("org.mpris.MediaPlayer2.Player", "PlaybackStatus")
         );
+        assert_eq!(IDENTITY_REQUEST, ("org.mpris.MediaPlayer2", "Identity"));
     }
 
     #[test]

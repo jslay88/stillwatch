@@ -16,9 +16,9 @@ mod view;
 mod tests;
 
 pub(crate) use catalog::load as load_devices;
-pub use catalog::{Catalog, GamepadSeen, activity_lit};
+pub use catalog::{Catalog, GamepadSeen, PlayerSeen, activity_lit};
 pub use editor::{Editor, Outcome, handle};
-pub use pickers::{PickerRow, gamepad_rows, output_rows, player_rows, player_value};
+pub use pickers::{PickerRow, gamepad_rows, output_rows, player_label, player_rows, player_value};
 pub use presets::KeyChange;
 pub(crate) use values::RegionInput;
 pub use view::page;

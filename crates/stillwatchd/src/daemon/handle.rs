@@ -6,7 +6,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use futures_util::Stream;
-use stillwatch_core::backend::{BackendError, BackendFuture, GamepadDevice};
+use stillwatch_core::backend::{BackendError, BackendFuture, GamepadDevice, MediaPlayer};
 use stillwatch_core::event::ControlCommand;
 use stillwatch_core::history::HistoryEntry;
 use stillwatch_core::prompt::PromptOutcome;
@@ -106,7 +106,7 @@ impl DaemonHandle for Handle {
             .unwrap_or_default()
     }
 
-    fn players(&self) -> BackendFuture<'_, Vec<String>> {
+    fn players(&self) -> BackendFuture<'_, Vec<MediaPlayer>> {
         let media = Arc::clone(&self.shared.media);
         Box::pin(async move { media.players().await })
     }

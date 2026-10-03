@@ -50,8 +50,8 @@ pub use service::{
     enable_unit, query_unit, restart_unit, start_unit, stop_unit,
 };
 pub use settings::{
-    Catalog, GamepadSeen, KeyChange, PickerRow, activity_lit, gamepad_rows, output_rows,
-    player_rows, player_value,
+    Catalog, GamepadSeen, KeyChange, PickerRow, PlayerSeen, activity_lit, gamepad_rows,
+    output_rows, player_label, player_rows, player_value,
 };
 pub use shell::{DaemonCall, DaemonEvent, Link, Message, Shell, Snapshot, TrayAction, Visibility};
 

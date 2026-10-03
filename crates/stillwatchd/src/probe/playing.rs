@@ -2,19 +2,19 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use stillwatch_core::backend::EventSink;
+use stillwatch_core::backend::{EventSink, MediaPlayer};
 use stillwatch_core::event::Event;
 
-/// Playing MPRIS player names, updated by [`MediaWatcher::watch`].
+/// Playing MPRIS players, updated by [`MediaWatcher::watch`].
 ///
 /// [`MediaWatcher::watch`]: stillwatch_core::backend::MediaWatcher::watch
 #[derive(Clone, Default)]
-pub struct Playing(Arc<Mutex<Vec<String>>>);
+pub struct Playing(Arc<Mutex<Vec<MediaPlayer>>>);
 
 impl Playing {
     /// The last playing list, or empty before the first event.
     #[must_use]
-    pub fn snapshot(&self) -> Vec<String> {
+    pub fn snapshot(&self) -> Vec<MediaPlayer> {
         self.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -42,16 +42,16 @@ mod tests {
     #[test]
     fn media_events_replace_the_list() {
         let playing = Playing::default();
-        assert_eq!(playing.snapshot(), Vec::<String>::new());
+        assert_eq!(playing.snapshot(), Vec::<MediaPlayer>::new());
         playing.sink().send(Event::Media {
             playing: vec!["mpv".into()],
         });
-        assert_eq!(playing.snapshot(), ["mpv"]);
+        assert_eq!(playing.snapshot(), [MediaPlayer::named("mpv")]);
         playing.sink().send(ActivityEvent::InputIdle.into());
-        assert_eq!(playing.snapshot(), ["mpv"]);
+        assert_eq!(playing.snapshot(), [MediaPlayer::named("mpv")]);
         playing.sink().send(Event::Media {
             playing: Vec::new(),
         });
-        assert_eq!(playing.snapshot(), [] as [String; 0]);
+        assert_eq!(playing.snapshot(), [] as [MediaPlayer; 0]);
     }
 }

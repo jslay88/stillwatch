@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use crate::backend::BackendError;
+use crate::backend::{BackendError, MediaPlayer};
 use crate::luma::{LumaGrid, OutputInfo};
 use crate::prompt::PromptOutcome;
 use crate::time::TimerId;
@@ -99,11 +99,12 @@ pub enum Event {
         kind: PowerKind,
     },
     /// The set of MPRIS players reporting `Playing` changed. Holds every
-    /// playing player's name (as from `MediaWatcher::players`); the ignore
-    /// list is applied by the consumer. Empty when nothing is playing.
+    /// playing player (bus-name suffix and `Identity`, as from
+    /// `MediaWatcher::players`); the ignore list is applied by the consumer.
+    /// Empty when nothing is playing.
     Media {
-        /// Names of the players currently playing.
-        playing: Vec<String>,
+        /// Players currently playing.
+        playing: Vec<MediaPlayer>,
     },
     /// A capture tick finished for every requested output.
     CaptureCompleted {

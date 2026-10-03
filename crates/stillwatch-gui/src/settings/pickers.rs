@@ -7,7 +7,7 @@
 
 use stillwatch_core::config::{StaleConfig, ignores_device_name};
 
-use super::catalog::{self, GamepadSeen};
+use super::catalog::{self, GamepadSeen, PlayerSeen};
 
 /// Shown beside a configured entry the daemon doesn't currently report.
 pub const NOT_CONNECTED: &str = "not connected";
@@ -55,10 +55,21 @@ impl PickerRow {
 ///
 /// Instance suffixes change every launch (`firefox.instance_1_42`), and
 /// [`StaleConfig::is_player_ignored`] already treats the part before
-/// `.instance` as the player. The picker writes that part.
+/// `.instance` as the player. The picker writes that part, not `Identity`.
 #[must_use]
 pub fn player_value(name: &str) -> &str {
     name.split_once(".instance").map_or(name, |(head, _)| head)
+}
+
+/// Suffix, with `Identity` beside it when the player reported one.
+#[must_use]
+pub fn player_label(name: &str, identity: &str) -> String {
+    let stem = player_value(name);
+    if identity.is_empty() {
+        stem.to_owned()
+    } else {
+        format!("{stem} · {identity}")
+    }
 }
 
 /// Connected outputs, then configured names that aren't connected.
@@ -116,12 +127,14 @@ pub fn gamepad_rows(configured: &[String], live: &[GamepadSeen]) -> Vec<PickerRo
 }
 
 /// Current players, one row per stable name, then configured names that match none.
+///
+/// The label shows `Identity` beside the suffix. Checking still stores the suffix.
 #[must_use]
-pub fn player_rows(configured: &[String], live: &[String]) -> Vec<PickerRow> {
+pub fn player_rows(configured: &[String], live: &[PlayerSeen]) -> Vec<PickerRow> {
     let mut rows = Vec::new();
     let mut seen = Vec::new();
-    for name in live {
-        let stem = player_value(name);
+    for player in live {
+        let stem = player_value(&player.name);
         if seen
             .iter()
             .any(|have: &String| have.eq_ignore_ascii_case(stem))
@@ -129,13 +142,22 @@ pub fn player_rows(configured: &[String], live: &[String]) -> Vec<PickerRow> {
             continue;
         }
         seen.push(stem.to_owned());
-        let selected = configured
-            .iter()
-            .any(|entry| entry.eq_ignore_ascii_case(stem) || entry_covers(entry, name));
-        rows.push(row(stem, stem, selected, true, None));
+        let selected = configured.iter().any(|entry| {
+            live.iter().any(|candidate| {
+                player_value(&candidate.name).eq_ignore_ascii_case(stem)
+                    && entry_covers(entry, candidate)
+            })
+        });
+        rows.push(row(
+            stem,
+            &player_label(&player.name, &player.identity),
+            selected,
+            true,
+            None,
+        ));
     }
     for entry in configured {
-        if !live.iter().any(|name| entry_covers(entry, name)) {
+        if !live.iter().any(|player| entry_covers(entry, player)) {
             rows.push(row(entry, entry, true, false, None));
         }
     }
@@ -176,7 +198,7 @@ pub fn set_gamepad(items: &[String], name: &str, on: bool) -> Vec<String> {
 
 /// Checking adds the stable player name. Unchecking removes entries that match it.
 #[must_use]
-pub fn set_player(items: &[String], value: &str, live: &[String], on: bool) -> Vec<String> {
+pub fn set_player(items: &[String], value: &str, live: &[PlayerSeen], on: bool) -> Vec<String> {
     if on {
         if items.iter().any(|item| item.eq_ignore_ascii_case(value)) {
             return items.to_vec();
@@ -185,12 +207,12 @@ pub fn set_player(items: &[String], value: &str, live: &[String], on: bool) -> V
         next.push(value.to_owned());
         return next;
     }
-    let covered: Vec<&str> = live
+    let covered: Vec<&PlayerSeen> = live
         .iter()
-        .filter(|name| {
-            player_value(name).eq_ignore_ascii_case(value) || name.eq_ignore_ascii_case(value)
+        .filter(|player| {
+            player_value(&player.name).eq_ignore_ascii_case(value)
+                || player.name.eq_ignore_ascii_case(value)
         })
-        .map(String::as_str)
         .collect();
     items
         .iter()
@@ -198,7 +220,7 @@ pub fn set_player(items: &[String], value: &str, live: &[String], on: bool) -> V
             if item.eq_ignore_ascii_case(value) {
                 return false;
             }
-            !covered.iter().any(|name| entry_covers(item, name))
+            !covered.iter().any(|player| entry_covers(item, player))
         })
         .cloned()
         .collect()
@@ -220,12 +242,12 @@ fn row(
     }
 }
 
-fn entry_covers(entry: &str, player: &str) -> bool {
+fn entry_covers(entry: &str, player: &PlayerSeen) -> bool {
     let stale = StaleConfig {
         media_ignore_players: vec![entry.to_owned()],
         ..StaleConfig::default()
     };
-    stale.is_player_ignored(player)
+    stale.is_player_ignored(&player.name, &player.identity)
 }
 
 #[cfg(test)]

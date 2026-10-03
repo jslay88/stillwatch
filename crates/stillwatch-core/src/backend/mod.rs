@@ -33,7 +33,7 @@ pub use error::BackendError;
 pub use gamepad::{GamepadDevice, GamepadSource};
 pub use history::HistorySink;
 pub use idle::IdleSource;
-pub use media::MediaWatcher;
+pub use media::{MediaPlayer, MediaWatcher};
 pub use prompter::Prompter;
 pub use session::SessionMonitor;
 pub use sink::EventSink;

@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use crate::backend::MediaPlayer;
 use crate::config::Config;
 use crate::event::CaptureFrame;
 use crate::luma::OutputInfo;
@@ -14,7 +15,7 @@ pub struct Observation {
     /// Outputs of the frames passed in, in order.
     pub outputs: Vec<String>,
     /// The `playing` list passed in.
-    pub playing: Vec<String>,
+    pub playing: Vec<MediaPlayer>,
 }
 
 /// A [`StaleDetector`] that returns queued verdicts and records its calls.
@@ -125,7 +126,7 @@ impl ScriptedDetector {
 }
 
 impl StaleDetector for ScriptedDetector {
-    fn observe(&mut self, frames: &[CaptureFrame], playing: &[String]) -> DetectionStats {
+    fn observe(&mut self, frames: &[CaptureFrame], playing: &[MediaPlayer]) -> DetectionStats {
         let mut inner = lock(&self.inner);
         inner.observations.push(Observation {
             outputs: frames.iter().map(|frame| frame.output.clone()).collect(),

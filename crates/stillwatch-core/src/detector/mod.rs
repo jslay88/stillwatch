@@ -32,6 +32,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use tracing::warn;
 
+use crate::backend::MediaPlayer;
 use crate::config::{CaptureBackend, Config, SafetyConfig, StaleConfig};
 use crate::event::CaptureFrame;
 use crate::luma::{self, OutputInfo};
@@ -172,7 +173,7 @@ impl BlockDetector {
     ///
     /// A grid smaller than `block_grid` can't be split into blocks. That
     /// output is logged and treated like means that don't match the grid.
-    pub fn observe(&mut self, frames: &[CaptureFrame], playing: &[String]) -> DetectionStats {
+    pub fn observe(&mut self, frames: &[CaptureFrame], playing: &[MediaPlayer]) -> DetectionStats {
         let [cols, rows] = self.grid();
         let reduced: Vec<(&str, Option<luma::BlockMeans>)> = frames
             .iter()
@@ -196,8 +197,8 @@ impl BlockDetector {
         self.observe_means(&outputs, playing)
     }
 
-    /// Feeds one capture tick of block means. `playing` is the list of
-    /// currently playing MPRIS player names.
+    /// Feeds one capture tick of block means. `playing` is every MPRIS player
+    /// currently reporting `Playing`.
     ///
     /// Unmonitored outputs are skipped. An output whose means don't match
     /// `block_grid` has its history reset and is reported with no counted
@@ -207,7 +208,7 @@ impl BlockDetector {
     pub fn observe_means(
         &mut self,
         outputs: &[BlockMeans<'_>],
-        playing: &[String],
+        playing: &[MediaPlayer],
     ) -> DetectionStats {
         let blocks = self.block_count();
         let mut observed = Vec::with_capacity(outputs.len());
@@ -292,7 +293,7 @@ impl BlockDetector {
 }
 
 impl StaleDetector for BlockDetector {
-    fn observe(&mut self, frames: &[CaptureFrame], playing: &[String]) -> DetectionStats {
+    fn observe(&mut self, frames: &[CaptureFrame], playing: &[MediaPlayer]) -> DetectionStats {
         Self::observe(self, frames, playing)
     }
 

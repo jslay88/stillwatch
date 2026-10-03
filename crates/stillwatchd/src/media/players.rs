@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 
+use stillwatch_core::backend::MediaPlayer;
+
 /// One player, keyed in [`PlayerSet`] by its well-known bus name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Player {
@@ -10,15 +12,23 @@ pub(crate) struct Player {
     pub owner: String,
     /// The reported name: the bus name without `org.mpris.MediaPlayer2.`.
     pub name: String,
+    /// `Identity` from `org.mpris.MediaPlayer2`, read once when the player appears.
+    pub identity: String,
     /// Whether `PlaybackStatus` is `Playing`.
     pub playing: bool,
+}
+
+impl Player {
+    fn reported(&self) -> MediaPlayer {
+        MediaPlayer::with_identity(self.name.clone(), self.identity.clone())
+    }
 }
 
 /// Every known player plus the playing set that was last reported.
 #[derive(Debug, Default)]
 pub(crate) struct PlayerSet {
     players: BTreeMap<String, Player>,
-    reported: Option<Vec<String>>,
+    reported: Option<Vec<MediaPlayer>>,
 }
 
 impl PlayerSet {
@@ -46,26 +56,23 @@ impl PlayerSet {
         }
     }
 
-    /// Names of the playing players, in bus-name order.
-    pub fn playing(&self) -> Vec<String> {
+    /// Playing players, in bus-name order.
+    pub fn playing(&self) -> Vec<MediaPlayer> {
         self.players
             .values()
             .filter(|player| player.playing)
-            .map(|player| player.name.clone())
+            .map(Player::reported)
             .collect()
     }
 
-    /// Names of every player, in bus-name order.
-    pub fn names(&self) -> Vec<String> {
-        self.players
-            .values()
-            .map(|player| player.name.clone())
-            .collect()
+    /// Every player, in bus-name order.
+    pub fn all(&self) -> Vec<MediaPlayer> {
+        self.players.values().map(Player::reported).collect()
     }
 
     /// The playing set if it differs from the one last returned here. The
     /// first call always returns it, so a fresh watch reports where it starts.
-    pub fn take_change(&mut self) -> Option<Vec<String>> {
+    pub fn take_change(&mut self) -> Option<Vec<MediaPlayer>> {
         let playing = self.playing();
         if self.reported.as_ref() == Some(&playing) {
             return None;
@@ -83,8 +90,13 @@ mod tests {
         Player {
             owner: owner.into(),
             name: name.into(),
+            identity: String::new(),
             playing,
         }
+    }
+
+    fn reported(names: &[&str]) -> Vec<MediaPlayer> {
+        names.iter().copied().map(MediaPlayer::named).collect()
     }
 
     fn set(players: &[(&str, Player)]) -> PlayerSet {
@@ -111,33 +123,33 @@ mod tests {
                 player(":1.6", "spotify", true),
             ),
         ]);
-        assert_eq!(players.take_change(), Some(vec!["spotify".into()]));
+        assert_eq!(players.take_change(), Some(reported(&["spotify"])));
 
         players.set_playing(":1.6", true);
         assert_eq!(players.take_change(), None);
 
         players.set_playing(":1.5", true);
-        assert_eq!(
-            players.take_change(),
-            Some(vec!["mpv".into(), "spotify".into()])
-        );
+        assert_eq!(players.take_change(), Some(reported(&["mpv", "spotify"])));
 
         players.insert(
             "org.mpris.MediaPlayer2.vlc".into(),
             player(":1.7", "vlc.instance7389", false),
         );
         assert_eq!(players.take_change(), None);
-        assert_eq!(players.names(), ["mpv", "spotify", "vlc.instance7389"]);
+        assert_eq!(
+            players.all(),
+            reported(&["mpv", "spotify", "vlc.instance7389"])
+        );
     }
 
     #[test]
     fn a_player_that_leaves_while_playing_is_dropped_from_the_set() {
         let mut players = set(&[("org.mpris.MediaPlayer2.mpv", player(":1.5", "mpv", true))]);
-        assert_eq!(players.take_change(), Some(vec!["mpv".into()]));
+        assert_eq!(players.take_change(), Some(reported(&["mpv"])));
         players.remove("org.mpris.MediaPlayer2.mpv");
         assert_eq!(players.take_change(), Some(vec![]));
         assert!(!players.owns(":1.5"));
-        assert_eq!(players.names(), Vec::<String>::new());
+        assert_eq!(players.all(), Vec::<MediaPlayer>::new());
     }
 
     #[test]
@@ -150,9 +162,9 @@ mod tests {
         assert!(players.owns(":1.5"));
         assert!(!players.owns(":1.42"));
         players.set_playing(":1.42", true);
-        assert_eq!(players.playing(), Vec::<String>::new());
+        assert_eq!(players.playing(), Vec::<MediaPlayer>::new());
         players.set_playing(":1.5", true);
-        assert_eq!(players.playing(), ["a", "b"]);
+        assert_eq!(players.playing(), reported(&["a", "b"]));
     }
 
     #[test]
@@ -164,6 +176,29 @@ mod tests {
         );
         assert!(!players.owns(":1.5"));
         assert!(players.owns(":1.8"));
-        assert_eq!(players.playing(), Vec::<String>::new());
+        assert_eq!(players.playing(), Vec::<MediaPlayer>::new());
+    }
+
+    #[test]
+    fn identity_rides_along_and_a_repeat_status_is_quiet() {
+        let mut players = set(&[(
+            "org.mpris.MediaPlayer2.vlc",
+            Player {
+                owner: ":1.2".into(),
+                name: "vlc".into(),
+                identity: "VLC media player".into(),
+                playing: true,
+            },
+        )]);
+        assert_eq!(
+            players.take_change(),
+            Some(vec![MediaPlayer::with_identity("vlc", "VLC media player")])
+        );
+        players.set_playing(":1.2", true);
+        assert_eq!(players.take_change(), None);
+        assert_eq!(
+            players.all(),
+            vec![MediaPlayer::with_identity("vlc", "VLC media player")]
+        );
     }
 }

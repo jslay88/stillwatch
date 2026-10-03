@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::MediaPlayer;
 use crate::config::{CaptureBackend, IgnoreRegion, StaleRequire};
 use crate::stats::{Threshold, ThresholdReason};
 
@@ -31,7 +32,7 @@ fn frame(blocks: usize, capture: usize, still: f32, moving: impl Fn(usize) -> bo
 fn feed(
     detector: &mut BlockDetector,
     frames: &[(&str, &[f32])],
-    playing: &[String],
+    playing: &[MediaPlayer],
 ) -> DetectionStats {
     let means: Vec<BlockMeans<'_>> = frames
         .iter()
@@ -46,7 +47,7 @@ fn settle(
     detector: &mut BlockDetector,
     still: f32,
     moving: impl Fn(usize) -> bool + Copy,
-    playing: &[String],
+    playing: &[MediaPlayer],
 ) -> DetectionStats {
     let blocks = detector.block_count();
     let mut last = None;
@@ -61,8 +62,8 @@ fn assert_percent(actual: f64, expected: f64) {
     assert!((actual - expected).abs() < 1e-9, "{actual} != {expected}");
 }
 
-fn players(names: &[&str]) -> Vec<String> {
-    names.iter().map(|name| (*name).to_owned()).collect()
+fn players(names: &[&str]) -> Vec<MediaPlayer> {
+    names.iter().copied().map(MediaPlayer::named).collect()
 }
 
 #[test]

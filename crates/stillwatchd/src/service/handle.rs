@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use futures_util::stream::BoxStream;
 use jiff::Timestamp;
-use stillwatch_core::backend::{BackendFuture, GamepadDevice};
+use stillwatch_core::backend::{BackendFuture, GamepadDevice, MediaPlayer};
 use stillwatch_core::event::ControlCommand;
 use stillwatch_core::history::HistoryEntry;
 use stillwatch_core::panel::PanelRecord;
@@ -65,8 +65,8 @@ pub trait DaemonHandle: Send + Sync {
     /// Detected gamepads, as from `GamepadSource::devices`.
     fn gamepads(&self) -> Vec<GamepadDevice>;
 
-    /// MPRIS player names, as from `MediaWatcher::players`.
-    fn players(&self) -> BackendFuture<'_, Vec<String>>;
+    /// MPRIS players, as from `MediaWatcher::players`.
+    fn players(&self) -> BackendFuture<'_, Vec<MediaPlayer>>;
 }
 
 /// Everything `Status()` reports: the state machine's snapshot plus what only

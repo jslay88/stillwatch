@@ -6,7 +6,7 @@ use std::time::Duration;
 use futures_util::StreamExt as _;
 use futures_util::stream::{self, BoxStream};
 use jiff::Timestamp;
-use stillwatch_core::backend::{BackendError, BackendFuture, GamepadDevice};
+use stillwatch_core::backend::{BackendError, BackendFuture, GamepadDevice, MediaPlayer};
 use stillwatch_core::config::PromptConfig;
 use stillwatch_core::event::ControlCommand;
 use stillwatch_core::history::HistoryEntry;
@@ -35,7 +35,7 @@ pub struct FakeState {
     /// Returned by `gamepads`.
     pub gamepads: Vec<GamepadDevice>,
     /// Returned by `players`.
-    pub players: Vec<String>,
+    pub players: Vec<MediaPlayer>,
     /// Yielded by every probe stream, once right away and then every
     /// interval.
     pub sample: ProbeSample,
@@ -201,7 +201,7 @@ impl DaemonHandle for FakeHandle {
         lock(&self.state).gamepads.clone()
     }
 
-    fn players(&self) -> BackendFuture<'_, Vec<String>> {
+    fn players(&self) -> BackendFuture<'_, Vec<MediaPlayer>> {
         self.answer(|state| state.players.clone())
     }
 }

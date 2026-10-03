@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::backend::MediaPlayer;
 use crate::config::limits::{Bounds, DOWNSCALE_WIDTH, LUMA, PERCENT, PERCENT_NONZERO, POSITIVE};
 use crate::config::validate::Issues;
 
@@ -109,24 +110,25 @@ impl StaleConfig {
         u64::from(self.persist_checks) * u64::from(self.check_interval_seconds)
     }
 
-    /// Whether `player` is on `media_ignore_players`.
+    /// Whether `name` or `identity` is on `media_ignore_players`.
     ///
-    /// Matching ignores case, and an entry also covers that player's MPRIS
-    /// instances: `firefox` matches `firefox.instance_1_42`.
+    /// The bus-name suffix matches case-insensitively, as the whole name or
+    /// as the prefix before a `.` (`firefox` matches `firefox.instance_1_42`).
+    /// `identity` matches case-insensitively as a whole string
+    /// (`VLC media player`), not as a prefix of that string.
     #[must_use]
-    pub fn is_player_ignored(&self, player: &str) -> bool {
-        self.media_ignore_players.iter().any(|ignored| {
-            player.get(..ignored.len()).is_some_and(|head| {
-                head.eq_ignore_ascii_case(ignored)
-                    && matches!(player.as_bytes().get(ignored.len()), None | Some(b'.'))
-            })
-        })
+    pub fn is_player_ignored(&self, name: &str, identity: &str) -> bool {
+        self.media_ignore_players
+            .iter()
+            .any(|ignored| suffix_matches(name, ignored) || identity_matches(identity, ignored))
     }
 
     /// Whether any of the `playing` players is not ignored.
     #[must_use]
-    pub fn media_playing(&self, playing: &[String]) -> bool {
-        playing.iter().any(|player| !self.is_player_ignored(player))
+    pub fn media_playing(&self, playing: &[MediaPlayer]) -> bool {
+        playing
+            .iter()
+            .any(|player| !self.is_player_ignored(&player.name, &player.identity))
     }
 
     pub(crate) fn validate(&self, issues: &mut Issues) {
@@ -178,6 +180,20 @@ impl StaleConfig {
             }
         }
     }
+}
+
+/// Case-insensitive bus-name match: the whole suffix, or a prefix ending at `.`.
+fn suffix_matches(name: &str, ignored: &str) -> bool {
+    name.get(..ignored.len()).is_some_and(|head| {
+        head.eq_ignore_ascii_case(ignored)
+            && matches!(name.as_bytes().get(ignored.len()), None | Some(b'.'))
+    })
+}
+
+/// Case-insensitive whole-string match against `Identity`. An empty identity
+/// matches nothing, including a blank ignore entry.
+fn identity_matches(identity: &str, ignored: &str) -> bool {
+    !identity.is_empty() && identity.eq_ignore_ascii_case(ignored)
 }
 
 /// `[safety]`: the snooze ceiling.

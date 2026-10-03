@@ -1,6 +1,6 @@
 //! JSON encoding for payloads carried as D-Bus strings.
 //!
-//! `Status`, `Gamepads`, and the `ProbeSample` signal carry one JSON
+//! `Status`, `Gamepads`, `Players`, and the `ProbeSample` signal carry one JSON
 //! document; `History` carries JSON lines (one object per line, each ending in
 //! `\n`).
 

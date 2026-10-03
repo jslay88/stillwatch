@@ -108,7 +108,7 @@ pub(super) struct Ctx {
     /// Output generation at the moment Blanked was entered.
     blank_generation: HashMap<String, u64>,
     pub(super) locked: bool,
-    pub(super) playing: Vec<String>,
+    pub(super) playing: Vec<crate::backend::MediaPlayer>,
     pub(super) last_gamepad: Option<Instant>,
     pub(super) last_detection: Option<DetectionStats>,
     pub(super) snooze_until: Option<Instant>,

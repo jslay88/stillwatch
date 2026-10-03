@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use stillwatch_core::backend::GamepadDevice;
+use stillwatch_core::backend::{GamepadDevice, MediaPlayer};
 use stillwatch_testkit::PrivateBus;
 use stillwatchd::service::Service;
 use stillwatchd::service::fake::FakeHandle;
@@ -49,7 +49,10 @@ async fn pickers_read_outputs_gamepads_and_players_from_the_daemon() {
                 last_activity: Some(now.checked_sub(Duration::from_secs(10)).unwrap()),
             },
         ];
-        state.players = vec!["firefox.instance_1_42".into(), "spotify".into()];
+        state.players = vec![
+            MediaPlayer::with_identity("firefox.instance_1_42", "Firefox"),
+            MediaPlayer::with_identity("spotify", "Spotify"),
+        ];
     });
     let _service = Service::claim(server, Arc::clone(&fake) as _)
         .await
@@ -96,11 +99,9 @@ async fn pickers_read_outputs_gamepads_and_players_from_the_daemon() {
 
     assert_eq!(player_value("firefox.instance_1_42"), "firefox");
     let players = player_rows(&["vlc".into()], &catalog.players);
-    assert!(
-        players
-            .iter()
-            .any(|row| row.value == "firefox" && row.connected)
-    );
+    assert!(players.iter().any(|row| {
+        row.value == "firefox" && row.connected && row.label == "firefox · Firefox"
+    }));
     assert!(
         players
             .iter()

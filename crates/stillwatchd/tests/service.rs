@@ -6,13 +6,14 @@ use std::time::Duration;
 
 use futures_util::StreamExt as _;
 use jiff::Timestamp;
-use stillwatch_core::backend::{BackendError, GamepadDevice};
+use stillwatch_core::backend::{BackendError, GamepadDevice, MediaPlayer};
 use stillwatch_core::event::ControlCommand;
 use stillwatch_core::history::{HistoryEntry, HistoryKind};
 use stillwatch_core::prompt::PromptOutcome;
 use stillwatch_core::state::{State, StatusSnapshot};
 use stillwatch_ipc::gamepad::GamepadInfo;
 use stillwatch_ipc::json::{from_json, from_json_lines};
+use stillwatch_ipc::player::PlayerInfo;
 use stillwatch_ipc::probe::ProbeSample;
 use stillwatch_ipc::proxy::StillwatchProxy;
 use stillwatch_ipc::status::{PanelCareStatus, StatusPayload};
@@ -233,7 +234,7 @@ async fn pickers_list_outputs_gamepads_and_players() {
     peer.fake.update(|state| {
         state.outputs = vec!["HDMI-A-1".into(), "DP-1".into()];
         state.gamepads = vec![pad.clone()];
-        state.players = vec!["spotify".into()];
+        state.players = vec![MediaPlayer::with_identity("spotify", "Spotify")];
     });
 
     assert_eq!(peer.proxy.outputs().await.unwrap(), ["HDMI-A-1", "DP-1"]);
@@ -242,7 +243,14 @@ async fn pickers_list_outputs_gamepads_and_players() {
         pads,
         [GamepadInfo::from_device(&pad, std::time::Instant::now())]
     );
-    assert_eq!(peer.proxy.players().await.unwrap(), ["spotify"]);
+    let players: Vec<PlayerInfo> = from_json(&peer.proxy.players().await.unwrap()).unwrap();
+    assert_eq!(
+        players,
+        [PlayerInfo {
+            name: "spotify".into(),
+            identity: "Spotify".into(),
+        }]
+    );
 }
 
 #[tokio::test]

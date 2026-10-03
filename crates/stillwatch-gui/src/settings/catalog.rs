@@ -6,6 +6,7 @@
 
 use stillwatch_ipc::gamepad::GamepadInfo;
 use stillwatch_ipc::json::from_json;
+use stillwatch_ipc::player::PlayerInfo;
 use stillwatch_ipc::proxy::StillwatchProxy;
 
 use crate::error::Error;
@@ -34,8 +35,29 @@ pub struct Catalog {
     pub outputs: Vec<String>,
     /// Detected gamepads.
     pub gamepads: Vec<GamepadSeen>,
-    /// MPRIS player bus-name suffixes.
-    pub players: Vec<String>,
+    /// MPRIS players on the bus.
+    pub players: Vec<PlayerSeen>,
+}
+
+/// One player from `Players()`.
+///
+/// `name` is the bus-name suffix. `identity` is shown beside it. The checkbox
+/// still stores the suffix (or whatever free text the file already has).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlayerSeen {
+    /// Bus-name suffix, including an instance suffix when the player has one.
+    pub name: String,
+    /// `Identity`. Empty when the player did not report one.
+    pub identity: String,
+}
+
+impl From<PlayerInfo> for PlayerSeen {
+    fn from(info: PlayerInfo) -> Self {
+        Self {
+            name: info.name,
+            identity: info.identity,
+        }
+    }
 }
 
 /// One gamepad from `Gamepads()`, without the daemon's saved ignore flag.
@@ -70,10 +92,10 @@ impl From<GamepadInfo> for GamepadSeen {
 pub(crate) async fn load(proxy: &StillwatchProxy<'_>) -> Result<Catalog, Error> {
     let outputs = proxy.outputs().await?;
     let pads: Vec<GamepadInfo> = from_json(&proxy.gamepads().await?)?;
-    let players = proxy.players().await?;
+    let players: Vec<PlayerInfo> = from_json(&proxy.players().await?)?;
     Ok(Catalog {
         outputs,
         gamepads: pads.into_iter().map(GamepadSeen::from).collect(),
-        players,
+        players: players.into_iter().map(PlayerSeen::from).collect(),
     })
 }
