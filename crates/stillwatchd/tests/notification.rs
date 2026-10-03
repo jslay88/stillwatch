@@ -252,12 +252,18 @@ async fn dropping_show_closes_the_prompt() -> TestResult {
     let Some(s) = Setup::start().await? else {
         return Ok(());
     };
-    let (task, sent) = s.shown().await?;
+    let (task, first) = s.shown().await?;
+    // The countdown tick means `show` got past `Notify` and is tracking an id.
+    // Aborting in the gap after the server records `Notify` drops the call
+    // before that id exists, so nothing is closed.
+    let sent = s.notified(2).await?;
+    let current = sent.last().expect("replacement").id;
     task.abort();
-    wait_until(|| s.server.close_calls().contains(&sent.id).then_some(())).await?;
+    wait_until(|| s.server.close_calls().contains(&current).then_some(())).await?;
     assert_eq!(s.server.open_ids(), Vec::<u32>::new());
     s.prompter.dismiss().await?;
-    assert_eq!(s.server.close_calls(), [sent.id]);
+    assert!(s.server.close_calls().contains(&first.id));
+    assert!(s.server.close_calls().contains(&current));
     Ok(())
 }
 
