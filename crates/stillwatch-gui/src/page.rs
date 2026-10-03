@@ -1,4 +1,4 @@
-//! Settings-window pages. Each one is a placeholder until its own issue.
+//! Settings-window pages. History and service are still placeholders.
 
 /// A page of the settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -6,7 +6,7 @@ pub enum Page {
     /// Schema-driven settings.
     #[default]
     Settings,
-    /// Calibration heatmap (later).
+    /// Calibration heatmap and ignore-region editor.
     Calibration,
     /// Decision history (later).
     History,
@@ -39,7 +39,7 @@ impl Page {
     pub const fn placeholder(self) -> &'static str {
         match self {
             Self::Settings => "Settings editing is not built yet.",
-            Self::Calibration => "The calibration view is not built yet.",
+            Self::Calibration => "The calibration heatmap is on this page.",
             Self::History => "History is not built yet.",
             Self::Service => "Service controls are not built yet.",
         }

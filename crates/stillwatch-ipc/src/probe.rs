@@ -21,6 +21,15 @@ pub struct ProbeOutput {
     pub rows: u16,
     /// Row-major block states, `columns * rows` long.
     pub blocks: Vec<BlockState>,
+    /// Output width in pixels. Zero when the capture didn't report a size.
+    ///
+    /// This is the output's dimensions, so a drawn ignore region can be stored
+    /// in output pixels. It is not frame contents.
+    #[serde(default)]
+    pub width: u32,
+    /// Output height in pixels. Zero when the capture didn't report a size.
+    #[serde(default)]
+    pub height: u32,
 }
 
 impl ProbeOutput {
@@ -52,6 +61,8 @@ impl ProbeOutput {
             columns,
             rows,
             blocks,
+            width: 0,
+            height: 0,
         })
     }
 

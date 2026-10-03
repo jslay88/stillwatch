@@ -55,11 +55,16 @@ fn from_stats(
     let outputs = stats
         .outputs
         .into_iter()
-        .map(|output| ProbeOutput {
-            blocks: detector.blocks(&output.output).unwrap_or(&[]).to_vec(),
-            stats: output,
-            columns,
-            rows,
+        .map(|output| {
+            let (width, height) = detector.output_size(&output.output).unwrap_or((0, 0));
+            ProbeOutput {
+                blocks: detector.blocks(&output.output).unwrap_or(&[]).to_vec(),
+                stats: output,
+                columns,
+                rows,
+                width,
+                height,
+            }
         })
         .collect();
     Ok(ProbeSample {

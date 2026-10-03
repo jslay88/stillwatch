@@ -85,6 +85,8 @@ async fn static_blocks_become_persistent_after_persist_checks() {
     assert!(!json.contains("luma"), "{json}");
     let samples: Vec<ProbeSample> = from_json_lines(&json).unwrap();
     assert_eq!(samples.len(), count);
+    assert_eq!(samples[0].outputs[0].width, 400);
+    assert_eq!(samples[0].outputs[0].height, 400);
     assert!(
         samples[0].outputs[0]
             .blocks

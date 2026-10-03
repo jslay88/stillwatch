@@ -3,6 +3,8 @@
 
 use stillwatch_core::state::State;
 
+use crate::calibration::{self, CalMsg};
+use crate::page::Page;
 use crate::settings::{self, Catalog};
 use crate::shell::{
     DaemonCall, DaemonEvent, Link, Message, Shell, Snapshot, TrayAction, Visibility, snooze_seconds,
@@ -13,8 +15,29 @@ use crate::shell::{
 /// Window open/close and page routing stay on `shell`. Calls are returned
 /// even when the daemon is currently down, so the watcher can report the
 /// failure instead of the menu pretending the click did something.
+/// The calibration page adds `StartProbe` while it is showing and `StopProbe`
+/// when it is left or the window closes.
 #[must_use]
 pub fn update(shell: &mut Shell, message: Message) -> Vec<DaemonCall> {
+    let mut calls = apply(shell, message);
+    if let Some(call) = probe_call(shell) {
+        calls.push(call);
+    }
+    calls
+}
+
+fn probe_call(shell: &mut Shell) -> Option<DaemonCall> {
+    let visible = shell.settings.is_open() && shell.page == Page::Calibration;
+    let up = matches!(shell.link, Link::Up(_));
+    let seconds = shell
+        .editor
+        .number("stale.check_interval_seconds")
+        .unwrap_or(60);
+    let interval = calibration::interval_ms(shell.calibration.pace, seconds);
+    calibration::next_call(&mut shell.calibration, visible, up, interval)
+}
+
+fn apply(shell: &mut Shell, message: Message) -> Vec<DaemonCall> {
     match message {
         Message::Navigate(page) => shell.page = page,
         Message::OpenSettings => {
@@ -26,6 +49,7 @@ pub fn update(shell: &mut Shell, message: Message) -> Vec<DaemonCall> {
         Message::ClosePrompt => shell.prompt = Visibility::Closed,
         Message::Quit => shell.quit = true,
         Message::Settings(message) => return settings_msg(shell, message),
+        Message::Calibration(message) => return calibration_msg(shell, message),
         Message::Tray(action) => return tray(shell, action),
         Message::BecamePrimary { first, mode } => {
             shell.apply_launch(mode, first);
@@ -70,6 +94,8 @@ fn apply_daemon(shell: &mut Shell, event: DaemonEvent) -> Vec<DaemonCall> {
             shell.link = Link::Down;
             shell.notice = None;
             shell.devices = Catalog::default();
+            shell.capture_backend = None;
+            shell.capture_known = false;
             Vec::new()
         }
         DaemonEvent::Snapshot(snapshot) => {
@@ -107,7 +133,26 @@ fn apply_daemon(shell: &mut Shell, event: DaemonEvent) -> Vec<DaemonCall> {
             shell.devices = catalog;
             Vec::new()
         }
+        DaemonEvent::Capture(backend) => {
+            shell.capture_backend = backend;
+            shell.capture_known = true;
+            Vec::new()
+        }
+        DaemonEvent::Probe(view) => {
+            if shell.settings.is_open() && shell.page == Page::Calibration {
+                shell.calibration.view = Some(view);
+            }
+            Vec::new()
+        }
     }
+}
+
+fn calibration_msg(shell: &mut Shell, message: CalMsg) -> Vec<DaemonCall> {
+    let count = shell.editor.ignore_regions().len();
+    let Some(change) = calibration::handle(&mut shell.calibration, count, message) else {
+        return Vec::new();
+    };
+    settings_msg(shell, crate::edit_msg::SettingsMsg::Edit(change))
 }
 
 fn settings_msg(shell: &mut Shell, message: crate::edit_msg::SettingsMsg) -> Vec<DaemonCall> {

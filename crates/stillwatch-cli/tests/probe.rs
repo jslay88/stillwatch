@@ -32,6 +32,8 @@ fn sample() -> ProbeSample {
             columns: 2,
             rows: 2,
             blocks,
+            width: 1920,
+            height: 1080,
         }],
     }
 }

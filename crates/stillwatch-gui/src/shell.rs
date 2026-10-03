@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use stillwatch_core::state::State;
 use stillwatch_ipc::status::StatusPayload;
 
+use crate::calibration::{CalMsg, Calibration, ProbeView};
 use crate::edit_msg::SettingsMsg;
 use crate::launch::LaunchMode;
 use crate::page::Page;
@@ -113,6 +114,10 @@ pub enum DaemonEvent {
     CallFailed(String),
     /// `Outputs()`, `Gamepads()`, and `Players()`.
     Devices(Catalog),
+    /// `Status().capture_backend`. `None` is input-idle-only mode.
+    Capture(Option<String>),
+    /// A `ProbeSample`, reduced to block states and percentages.
+    Probe(ProbeView),
 }
 
 /// A method the tray asked the daemon to run.
@@ -133,6 +138,13 @@ pub enum DaemonCall {
     Reload,
     /// `Outputs()`, `Gamepads()`, and `Players()`, for the settings pickers.
     RefreshDevices,
+    /// `StartProbe(interval_ms)`. Calling again replaces the interval.
+    StartProbe {
+        /// Milliseconds between samples.
+        interval_ms: u32,
+    },
+    /// `StopProbe()`.
+    StopProbe,
 }
 
 /// A tray menu (or left-click) choice.
@@ -184,6 +196,8 @@ pub enum Message {
     Daemon(DaemonEvent),
     /// An edit, save, or restore on the settings page.
     Settings(SettingsMsg),
+    /// A calibration-page control.
+    Calibration(CalMsg),
 }
 
 /// The settings window, the prompt placeholder, and the daemon link.
@@ -213,6 +227,12 @@ pub struct Shell {
     pub editor: Editor,
     /// Live outputs, gamepads, and players. Empty while the daemon is down.
     pub devices: Catalog,
+    /// Capture backend from the last status, when one was reported.
+    pub capture_backend: Option<String>,
+    /// Status has arrived since the daemon last went down.
+    pub capture_known: bool,
+    /// Calibration heatmap and the probe it drives.
+    pub calibration: Calibration,
 }
 
 impl Shell {
@@ -232,6 +252,9 @@ impl Shell {
             config_path: None,
             editor: Editor::pristine(),
             devices: Catalog::default(),
+            capture_backend: None,
+            capture_known: false,
+            calibration: Calibration::default(),
         }
     }
 

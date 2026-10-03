@@ -2,14 +2,15 @@
 //!
 //! The window is an iced daemon: it stays up with no window until the tray
 //! or a second invocation asks for one, and it keeps running after the last
-//! window closes. The settings page is generated from the schema. Calibration,
-//! history, service, and the prompt dialog are still placeholders. The tray
+//! window closes. The settings page is generated from the schema. Calibration
+//! is the heatmap. History, service, and the prompt dialog are still placeholders. The tray
 //! speaks D-Bus to `stillwatchd` and does not need the daemon in order to open.
 
 mod app;
 mod args;
 mod boot;
 mod bus;
+mod calibration;
 mod daemon;
 mod edit_msg;
 mod error;
@@ -28,11 +29,13 @@ mod view;
 mod windows;
 
 pub use args::Cli;
+pub use calibration::{CalMsg, Calibration, OutputHeat, ProbePace, ProbeView};
 pub use daemon::{dispatch, watch};
 pub use edit_msg::{FieldChange, PresetKind, RegionPart, RestoreScope, SettingsMsg};
 pub use instance::{Claim, GUI_BUS_NAME, claim};
 pub use launch::LaunchMode;
 pub use model::update;
+pub use page::Page;
 pub use settings::{
     Catalog, GamepadSeen, KeyChange, PickerRow, activity_lit, gamepad_rows, output_rows,
     player_rows, player_value,
