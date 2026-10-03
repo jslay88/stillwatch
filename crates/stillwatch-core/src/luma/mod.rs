@@ -3,8 +3,24 @@
 //! A [`LumaGrid`] is the only form a captured frame takes after a capture
 //! backend is done with it. It never leaves the daemon: it is not serializable,
 //! and only per-block states and percentages derived from it are ever sent.
+//!
+//! Capture backends wrap the buffer they received in a [`RawFrame`] and call
+//! [`downscale`], which decodes and area-averages it in one pass. The detector
+//! then reduces the grid to [`BlockMeans`] with [`block_means`].
+
+mod area;
+mod blocks;
+mod decode;
+mod downscale;
+mod format;
+mod frame;
 
 use serde::{Deserialize, Serialize};
+
+pub use blocks::{BlockGridError, BlockMeans, block_means};
+pub use downscale::downscale;
+pub use format::{FormatFamily, PixelFormat, UnsupportedFormat};
+pub use frame::{FrameError, RawFrame};
 
 /// A connected output (monitor) as reported by a capture backend.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
