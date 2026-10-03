@@ -63,6 +63,21 @@ pub struct CaptureFrame {
     pub grid: LumaGrid,
 }
 
+/// Which backend a [`Event::DisplayPower`] report came from.
+///
+/// `on: false` is real standby for [`Dpms`](Self::Dpms) and [`Ddc`](Self::Ddc).
+/// For [`Overlay`](Self::Overlay) it means the black overlay is showing, and
+/// the panel stays powered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerKind {
+    /// DPMS mode. Off, standby, and suspend are `on: false`.
+    Dpms,
+    /// DDC/CI power mode. DPM off is `on: false`.
+    Ddc,
+    /// The black overlay. `on: false` means the overlay is up.
+    Overlay,
+}
+
 /// An input to the state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -77,6 +92,8 @@ pub enum Event {
         output: String,
         /// Whether the output is now showing content.
         on: bool,
+        /// Which backend reported it. Overlay-off is not standby.
+        kind: PowerKind,
     },
     /// The set of MPRIS players reporting `Playing` changed. Holds every
     /// playing player's name (as from `MediaWatcher::players`); the ignore

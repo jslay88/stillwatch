@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use stillwatch_core::backend::{BackendError, Blanker, EventSink};
-use stillwatch_core::event::Event;
+use stillwatch_core::event::{Event, PowerKind};
 use stillwatchd::overlay::OverlayBlanker;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -50,6 +50,7 @@ pub fn power(output: &str, on: bool) -> Event {
     Event::DisplayPower {
         output: output.to_owned(),
         on,
+        kind: PowerKind::Overlay,
     }
 }
 

@@ -25,6 +25,7 @@ pub(super) struct Handler;
 impl StateHandler for Handler {
     fn enter(&self, ctx: &mut Ctx, _via: &Transition) -> Option<Transition> {
         ctx.hook(HookKind::OnBlank);
+        super::super::care::on_blank(ctx);
         None
     }
 
@@ -34,7 +35,9 @@ impl StateHandler for Handler {
 
     fn on_event(&self, ctx: &mut Ctx, event: &Event) -> Option<Transition> {
         match event {
-            Event::DisplayPower { output, on: true } => {
+            Event::DisplayPower {
+                output, on: true, ..
+            } => {
                 if woke(ctx, output)
                     && next_reblank(ctx).is_some()
                     && !ctx.is_armed(TimerId::ReblankGrace)

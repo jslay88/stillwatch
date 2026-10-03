@@ -16,6 +16,7 @@ pub mod idle;
 pub mod media;
 pub mod outputs;
 pub mod overlay;
+pub mod panel;
 pub mod probe;
 pub mod process;
 pub mod prompt;

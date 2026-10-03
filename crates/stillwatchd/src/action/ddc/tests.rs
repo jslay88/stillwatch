@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use stillwatch_core::backend::{BackendError, Blanker};
-use stillwatch_core::event::Event;
+use stillwatch_core::event::{Event, PowerKind};
 use stillwatch_core::mocks::RecordingSink;
 use tempfile::TempDir;
 
@@ -58,6 +58,7 @@ fn power(output: &str, on: bool) -> Event {
     Event::DisplayPower {
         output: output.into(),
         on,
+        kind: PowerKind::Ddc,
     }
 }
 

@@ -15,6 +15,7 @@ pub mod history;
 pub mod luma;
 #[cfg(any(test, feature = "mocks"))]
 pub mod mocks;
+pub mod panel;
 pub mod prompt;
 pub mod schema;
 pub mod state;

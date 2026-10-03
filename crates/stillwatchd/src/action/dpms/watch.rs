@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use stillwatch_core::backend::{BackendError, EventSink};
-use stillwatch_core::event::Event;
+use stillwatch_core::event::{Event, PowerKind};
 use wayland_client::protocol::wl_callback::WlCallback;
 use wayland_client::protocol::wl_output::WlOutput;
 use wayland_client::protocol::wl_registry::{self, WlRegistry};
@@ -111,6 +111,7 @@ impl PowerState {
                 self.sink.send(Event::DisplayPower {
                     output: name.to_owned(),
                     on,
+                    kind: PowerKind::Dpms,
                 });
             }
         }

@@ -3,8 +3,9 @@ use std::time::{Duration, Instant};
 use super::ScriptedDetector;
 use crate::command::Command;
 use crate::config::{Config, ConfigError, LoadOutcome};
-use crate::event::{ActivityEvent, CaptureFrame, Event};
+use crate::event::{ActivityEvent, CaptureFrame, Event, PowerKind};
 use crate::luma::LumaGrid;
+use crate::panel::PanelRecord;
 use crate::prompt::PromptOutcome;
 use crate::state::{StaleDetector, State, StateMachine, StatusSnapshot};
 use crate::time::{Clock, FakeClock, TimerId, TimerQueue};
@@ -160,6 +161,7 @@ impl Harness {
         self.send(Event::DisplayPower {
             output: "HDMI-A-1".into(),
             on: true,
+            kind: PowerKind::Dpms,
         })
     }
 
@@ -215,6 +217,11 @@ impl Harness {
     #[must_use]
     pub const fn machine(&self) -> &StateMachine {
         &self.machine
+    }
+
+    /// Loads panel care counters the way the daemon does after reading `panel.json`.
+    pub fn restore_panel(&mut self, record: PanelRecord) {
+        self.machine.restore_panel(record);
     }
 
     /// The machine's detector.

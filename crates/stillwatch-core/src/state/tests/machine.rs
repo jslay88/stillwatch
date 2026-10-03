@@ -191,6 +191,7 @@ fn stray_events_are_ignored() {
         Event::DisplayPower {
             output: "HDMI-A-1".into(),
             on: false,
+            kind: crate::event::PowerKind::Dpms,
         },
         Event::OutputsChanged(vec![]),
         Event::Session(SessionEvent::ResumedFromSleep),
@@ -199,7 +200,21 @@ fn stray_events_are_ignored() {
     for state in [State::Active, State::Blanked, State::Locked, State::Paused] {
         let mut h = reach(state);
         for event in stray.clone() {
-            assert_eq!(h.send(event.clone()), vec![], "{state}: {event:?}");
+            let commands = h.send(event.clone());
+            if matches!(event, Event::DisplayPower { .. }) {
+                assert!(
+                    commands.iter().any(|command| matches!(
+                        command,
+                        Command::SetTimer {
+                            id: TimerId::PanelCareReminder,
+                            ..
+                        }
+                    )),
+                    "{state}: {commands:?}"
+                );
+            } else {
+                assert_eq!(commands, vec![], "{state}: {event:?}");
+            }
         }
         assert_eq!(h.state(), state);
     }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use stillwatch_core::backend::{BackendError, Blanker, EventSink};
-use stillwatch_core::event::Event;
+use stillwatch_core::event::{Event, PowerKind};
 use stillwatch_testkit::kwin::{Kwin, KwinOptions};
 use stillwatchd::action::dpms::DpmsBlanker;
 use stillwatchd::process::{CommandResult, CommandRunner, CommandSpec, TokioRunner};
@@ -85,6 +85,7 @@ fn power(output: &str, on: bool) -> Event {
     Event::DisplayPower {
         output: output.to_owned(),
         on,
+        kind: PowerKind::Dpms,
     }
 }
 

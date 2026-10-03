@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use compositor::{DpmsCompositor, MANAGER, OFF, ON, OUTPUT, STANDBY};
 use stillwatch_core::backend::{BackendError, Blanker};
-use stillwatch_core::event::Event;
+use stillwatch_core::event::{Event, PowerKind};
 use stillwatch_core::mocks::RecordingSink;
 use tokio::time::timeout;
 use wayland_client::Connection;
@@ -37,6 +37,7 @@ fn power(output: &str, on: bool) -> Event {
     Event::DisplayPower {
         output: output.to_owned(),
         on,
+        kind: PowerKind::Dpms,
     }
 }
 

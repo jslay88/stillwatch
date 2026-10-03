@@ -7,6 +7,7 @@
 //! A new behavior is a row in [`TRANSITIONS`] plus the handler code that
 //! returns it.
 
+mod care;
 mod context;
 mod detector;
 mod handlers;

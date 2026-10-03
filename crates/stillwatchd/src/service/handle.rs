@@ -7,6 +7,7 @@ use jiff::Timestamp;
 use stillwatch_core::backend::{BackendFuture, GamepadDevice};
 use stillwatch_core::event::ControlCommand;
 use stillwatch_core::history::HistoryEntry;
+use stillwatch_core::panel::PanelRecord;
 use stillwatch_core::prompt::PromptOutcome;
 use stillwatch_core::state::{SnoozeError, StatusSnapshot};
 use stillwatch_ipc::probe::ProbeSample;
@@ -95,6 +96,14 @@ impl DaemonStatus {
         }
     }
 
+    /// Fills panel care from the state machine's record. `None` leaves it off
+    /// the status, which is what `panel_care.enabled = false` reports.
+    #[must_use]
+    pub fn with_panel(mut self, record: Option<PanelRecord>) -> Self {
+        self.panel_care = record.map(PanelCareStatus::from);
+        self
+    }
+
     /// The wire payload.
     #[must_use]
     pub fn into_payload(self) -> StatusPayload {
@@ -172,6 +181,30 @@ mod tests {
                 panel_care: Some(panel),
                 ..StatusPayload::from_snapshot(&snapshot())
             }
+        );
+    }
+
+    #[test]
+    fn panel_record_is_the_status_section() {
+        let record = PanelRecord {
+            screen_on_seconds: 3 * 3600,
+            last_standby: Some(Timestamp::from_second(1_700_000_000).unwrap()),
+            overlay_uses: 2,
+        };
+        let status = DaemonStatus::new(snapshot()).with_panel(Some(record));
+        assert_eq!(
+            status.panel_care,
+            Some(PanelCareStatus {
+                screen_on_seconds: 3 * 3600,
+                last_standby: record.last_standby,
+                overlay_uses: 2,
+            })
+        );
+        assert!(
+            DaemonStatus::new(snapshot())
+                .with_panel(None)
+                .panel_care
+                .is_none()
         );
     }
 
