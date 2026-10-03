@@ -14,13 +14,33 @@ stillwatch pause
 stillwatch resume
 stillwatch reload
 stillwatch history [--since <DURATION>] [--json]
-stillwatch probe [--interval <DURATION>]
+stillwatch probe [--interval <DURATION>] [--count <N>] [--json]
 stillwatch idle-test [--timeout <DURATION>] # alias --minutes, a bare number is minutes
 stillwatch config init [--force] [PATH]
 stillwatch config check [PATH]
 ```
 
-Most commands are stubs until the daemon's D-Bus service lands. `stillwatch <command> --help` has details.
+`stillwatch <command> --help` has details. Durations use [humantime](https://docs.rs/humantime) syntax (`90s`, `45m`, `1h 30m`).
+
+Everything except `idle-test` and `config` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
+
+- **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
+- **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.
+- **`cancel-snooze`**, **`pause`**, **`resume`**: what they say.
+- **`reload`**: makes the daemon reload its config file and prints the result. If the new config is invalid, the problems are printed one per line, the daemon keeps the last good config, and the exit code is 1.
+- **`history`**: a table of recent decisions (time, event, state change, per-output persistent percentages with the threshold and reason, snooze/blank/answer details, and media/gamepad/lock context), oldest first. `--since 2h` limits it to the last two hours. `--json` prints one `HistoryEntry` per line.
+- **`probe`**: live calibration. Shows each output's block grid (`██` persistent, `░░` changed, `··` dark, `xx` ignored) with a summary line like `HDMI-A-1: persistent 72% (dark 18%, counted 230/256), threshold 70% normal -> STALE`. The interval defaults to `stale.check_interval_seconds` from the config file; `--interval 5s` is handy while tuning (100ms minimum). Runs until Ctrl-C or `--count` samples. `--json` prints one `ProbeSample` per line. Only block states and percentages leave the daemon, never pixels.
+
+Colors are used only when stdout is a terminal and `NO_COLOR` isn't set.
+
+Exit codes are the same for every command:
+
+| Code | Meaning |
+| -- | -- |
+| 0 | Success |
+| 1 | The command failed: the daemon refused it (the message says why), the config is invalid, or something else went wrong |
+| 2 | Usage error (bad flags or arguments) |
+| 3 | `stillwatchd` isn't running (`systemctl --user start stillwatch`) |
 
 `stillwatch idle-test` runs the daemon's idle and gamepad sources locally, no daemon needed, and prints a timestamped line each time the combined state changes: `idle`, `active (keyboard/mouse)`, or `active (gamepad: <name>)`. You only count as idle once the compositor reports input idle and no gamepad has moved past the deadzone for the timeout (default `idle.input_idle_minutes`). Ctrl-C stops it.
 

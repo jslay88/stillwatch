@@ -1,6 +1,6 @@
 //! `stillwatch config` commands, which work on the file directly.
 
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, anyhow, bail};
@@ -16,21 +16,21 @@ use crate::args::{ConfigCheckArgs, ConfigInitArgs};
 /// # Errors
 ///
 /// Fails if the file exists and `--force` wasn't given, or if it can't be written.
-pub fn init(args: &ConfigInitArgs) -> anyhow::Result<()> {
+pub fn init(args: &ConfigInitArgs, out: &mut dyn Write) -> anyhow::Result<()> {
     let path = path_or_default(args.path.as_deref())?;
-    init_at(&path, args.force, &mut io::stdout().lock())
+    init_at(&path, args.force, out)
 }
 
 /// `stillwatch config check`: loads, migrates in memory, and validates a file.
 ///
-/// Every problem is printed to stdout as `key: message`.
+/// Every problem is printed to `out` as `key: message`.
 ///
 /// # Errors
 ///
 /// Fails if the file is missing, unreadable, or invalid.
-pub fn check(args: &ConfigCheckArgs) -> anyhow::Result<()> {
+pub fn check(args: &ConfigCheckArgs, out: &mut dyn Write) -> anyhow::Result<()> {
     let path = path_or_default(args.path.as_deref())?;
-    check_at(&path, &mut io::stdout().lock())
+    check_at(&path, out)
 }
 
 fn path_or_default(path: Option<&Path>) -> anyhow::Result<PathBuf> {
