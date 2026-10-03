@@ -14,6 +14,11 @@ name = "stillwatch"
 path = "src/main.rs"
 
 [dependencies]
+anyhow.workspace = true
+clap.workspace = true
+humantime.workspace = true
+stillwatch-ipc.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true
