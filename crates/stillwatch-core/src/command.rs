@@ -14,10 +14,11 @@ use crate::state::State;
 use crate::time::TimerId;
 
 /// How displays are blanked.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BlankMethod {
     /// Signal off through the compositor (lets the panel reach standby).
+    #[default]
     Dpms,
     /// A black layer-shell surface per output (keeps the panel on).
     Overlay,

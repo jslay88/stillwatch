@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::command::BlankMethod;
 use crate::config::validate::Issues;
 
 /// The action taken when the prompt times out.
@@ -17,19 +18,6 @@ pub enum ActionMode {
     DimThenBlank,
     /// Run `command` instead of blanking.
     Command,
-}
-
-/// How displays are blanked.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BlankMethod {
-    /// DPMS off, so the display can reach standby.
-    #[default]
-    Dpms,
-    /// A black layer-shell overlay that keeps the signal alive.
-    Overlay,
-    /// DDC/CI power-mode standby.
-    DdcStandby,
 }
 
 /// Which outputs the action applies to.
