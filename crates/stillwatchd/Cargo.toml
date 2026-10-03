@@ -21,6 +21,7 @@ ddc-i2c.workspace = true
 evdev.workspace = true
 futures-util.workspace = true
 jiff.workspace = true
+smithay-client-toolkit.workspace = true
 stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
 thiserror.workspace = true

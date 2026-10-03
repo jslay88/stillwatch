@@ -14,6 +14,7 @@ pub mod history;
 pub mod idle;
 pub mod media;
 pub mod outputs;
+pub mod overlay;
 pub mod process;
 pub mod prompt;
 pub mod service;

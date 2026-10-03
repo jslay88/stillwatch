@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{CallLog, Script, ScriptedWatch, WatchEnd};
-use crate::backend::{BackendError, BackendFuture, Blanker, EventSink};
+use crate::backend::{BackendError, BackendFuture, Blanker, Dimmer, EventSink};
 use crate::event::Event;
 
 /// A call made to a [`MockBlanker`].
@@ -11,12 +11,21 @@ pub enum BlankerCall {
     Blank(Vec<String>),
     /// `unblank(outputs)`.
     Unblank(Vec<String>),
+    /// `dim(outputs, percent)`.
+    Dim {
+        /// The outputs passed in.
+        outputs: Vec<String>,
+        /// The brightness percentage passed in.
+        percent: u32,
+    },
+    /// `undim(outputs)`.
+    Undim(Vec<String>),
 }
 
-/// A [`Blanker`] that records calls, fails on demand, and plays scripted
-/// power events from `watch`.
+/// A [`Blanker`] (and [`Dimmer`]) that records calls, fails on demand, and
+/// plays scripted power events from `watch`.
 ///
-/// `blank` and `unblank` share one result queue; with it empty they succeed.
+/// Every call shares one result queue; with it empty they succeed.
 #[derive(Debug, Default)]
 pub struct MockBlanker {
     calls: CallLog<BlankerCall>,
@@ -31,7 +40,7 @@ impl MockBlanker {
         Self::default()
     }
 
-    /// Makes the next `blank` or `unblank` fail.
+    /// Makes the next `blank`, `unblank`, `dim`, or `undim` fail.
     pub fn fail_next(&self, error: BackendError) {
         self.results.push(Err(error));
     }
@@ -41,7 +50,7 @@ impl MockBlanker {
         self.power.push(events, end);
     }
 
-    /// Every `blank` and `unblank` call, oldest first.
+    /// Every call, oldest first.
     #[must_use]
     pub fn calls(&self) -> Vec<BlankerCall> {
         self.calls.snapshot()
@@ -64,6 +73,19 @@ impl Blanker for MockBlanker {
 
     fn watch(&self, sink: Arc<dyn EventSink>) -> BackendFuture<'_, ()> {
         self.power.watch(sink)
+    }
+}
+
+impl Dimmer for MockBlanker {
+    fn dim<'a>(&'a self, outputs: &'a [String], percent: u32) -> BackendFuture<'a, ()> {
+        self.respond(BlankerCall::Dim {
+            outputs: outputs.to_vec(),
+            percent,
+        })
+    }
+
+    fn undim<'a>(&'a self, outputs: &'a [String]) -> BackendFuture<'a, ()> {
+        self.respond(BlankerCall::Undim(outputs.to_vec()))
     }
 }
 
@@ -90,6 +112,29 @@ mod tests {
                 BlankerCall::Blank(outputs.clone()),
                 BlankerCall::Blank(outputs),
                 BlankerCall::Unblank(Vec::new()),
+            ]
+        );
+    }
+
+    #[test]
+    fn dims_share_the_call_log_and_result_queue() {
+        let blanker = MockBlanker::new();
+        let outputs = vec!["DP-1".to_owned()];
+        blanker.fail_next(BackendError::Unsupported("no layer shell".into()));
+
+        assert!(matches!(
+            now_or_never(blanker.dim(&outputs, 20)),
+            Some(Err(BackendError::Unsupported(_)))
+        ));
+        assert_eq!(now_or_never(blanker.undim(&outputs)), Some(Ok(())));
+        assert_eq!(
+            blanker.calls(),
+            vec![
+                BlankerCall::Dim {
+                    outputs: outputs.clone(),
+                    percent: 20,
+                },
+                BlankerCall::Undim(outputs),
             ]
         );
     }

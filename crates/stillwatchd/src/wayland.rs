@@ -42,10 +42,38 @@ impl<S: 'static> EventPump<S> {
         })
     }
 
+    /// A pump over an existing `queue` on `conn`, such as the one
+    /// [`registry_queue_init`](wayland_client::globals::registry_queue_init)
+    /// returns.
+    ///
+    /// # Errors
+    ///
+    /// As [`new`](Self::new).
+    pub fn with_queue(conn: &Connection, queue: EventQueue<S>) -> Result<Self, BackendError> {
+        let fd = conn.as_fd().try_clone_to_owned()?;
+        Ok(Self {
+            queue,
+            socket: AsyncFd::new(fd)?,
+        })
+    }
+
     /// The handle new protocol objects are created on.
     #[must_use]
     pub fn handle(&self) -> QueueHandle<S> {
         self.queue.handle()
+    }
+
+    /// Sends queued requests now. A full socket isn't an error; the next
+    /// [`turn`](Self::turn) sends the rest.
+    ///
+    /// # Errors
+    ///
+    /// [`BackendError::Disconnected`] when the socket fails.
+    pub fn flush(&self) -> Result<(), BackendError> {
+        match self.queue.flush() {
+            Err(error) if !is_would_block(&error) => Err(wayland_error(error)),
+            _ => Ok(()),
+        }
     }
 
     /// Dispatches whatever is queued, flushes requests, then waits for and
@@ -104,6 +132,19 @@ fn is_would_block(error: &WaylandError) -> bool {
     matches!(error, WaylandError::Io(io) if io.kind() == ErrorKind::WouldBlock)
 }
 
+/// Opens a connection. Backends take one so tests can point them at a
+/// private compositor.
+pub type Connector = dyn Fn() -> Result<Connection, BackendError> + Send + Sync;
+
+/// Connects using `WAYLAND_DISPLAY` / `WAYLAND_SOCKET`, like any client.
+///
+/// # Errors
+///
+/// As [`connect_error`].
+pub fn connect_to_env() -> Result<Connection, BackendError> {
+    Connection::connect_to_env().map_err(|error| connect_error(&error))
+}
+
 /// Maps a connection failure. A missing socket is treated as transient, since
 /// the compositor may be restarting.
 pub fn connect_error(error: &ConnectError) -> BackendError {
@@ -125,7 +166,8 @@ pub fn wayland_error(error: WaylandError) -> BackendError {
     }
 }
 
-fn dispatch_error(error: DispatchError) -> BackendError {
+/// Maps an error from dispatching events.
+pub fn dispatch_error(error: DispatchError) -> BackendError {
     match error {
         DispatchError::Backend(backend) => wayland_error(backend),
         bad @ DispatchError::BadMessage { .. } => BackendError::Protocol(bad.to_string()),
