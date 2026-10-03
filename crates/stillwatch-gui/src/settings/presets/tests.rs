@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use stillwatch_core::config::Config;
 
 use super::super::assemble;
-use super::{OLED_TV_BLANK_HOOK, OLED_TV_RESUME_HOOK, PresetDraft, changes, owned_keys, write};
+use super::{
+    MIXED_HELP, OLED_TV_BLANK_HOOK, OLED_TV_RESUME_HOOK, PresetDraft, changes, owned_keys, write,
+};
 use crate::edit_msg::PresetKind;
 
 fn values() -> BTreeMap<String, super::super::values::FieldValue> {
@@ -65,6 +67,8 @@ fn each_preset_diffs_only_its_keys() {
     assert_eq!(diff[0].after, "HDMI-A-1, DP-1");
     assert_eq!(diff[1].before, "all");
     assert_eq!(diff[1].after, "monitored");
+    assert_eq!(diff[2].before, "dpms");
+    assert_eq!(diff[2].after, "overlay");
 
     assert_eq!(
         changes(&values(), &PresetDraft::new(PresetKind::Custom)),
@@ -95,6 +99,24 @@ fn writing_a_preset_leaves_every_other_key_alone() {
             }
         }
     }
+}
+
+#[test]
+fn mixed_preset_blanks_monitored_outputs_with_the_overlay() {
+    assert!(MIXED_HELP.contains("KWin DPMS cannot spare the LCD"));
+    let mut values = values();
+    let mut draft = PresetDraft::new(PresetKind::Mixed);
+    draft.outputs = vec!["HDMI-A-1".into()];
+    assert!(write(&mut values, &draft));
+    match values.get("action.blank_method") {
+        Some(super::super::values::FieldValue::Text(text)) => assert_eq!(text, "overlay"),
+        other => panic!("blank_method is {other:?}"),
+    }
+    match values.get("action.outputs") {
+        Some(super::super::values::FieldValue::Text(text)) => assert_eq!(text, "monitored"),
+        other => panic!("outputs is {other:?}"),
+    }
+    assert!(!values.keys().any(|key| key == "profile"));
 }
 
 #[test]

@@ -117,7 +117,7 @@ A preset writes ordinary keys. There is no `profile` field in the file.
 | -- | -- |
 | OLED monitor | `blank_method = "dpms"`, `reblank_on_wake = true`, `reblank_fallback = "overlay"`. DPMS lets the panel reach standby, so its own compensation cycle can run. If a display wakes itself when the HDMI link drops, the re-blank watchdog blanks it again, and the overlay is the fallback that keeps the signal alive. |
 | OLED TV | `blank_method = "overlay"`, which leaves the TV on but covers it. Or `dpms` plus an `on_blank_cmd` / `on_resume_cmd` hook that tells the TV to turn its own screen off. The overlay blocks panel compensation because the panel stays powered. |
-| Mixed OLED and LCD | Put the OLED connector names in `stale.monitored_outputs` and set `outputs = "monitored"`. LCDs are left out of detection and out of the blank. |
+| Mixed OLED and LCD | Put the OLED connector names in `stale.monitored_outputs`, set `outputs = "monitored"`, and `blank_method = "overlay"`. KWin DPMS cannot spare the LCD: a partial DPMS request turns every output off, so the preset covers only the monitored outputs. |
 | Custom | Leave the keys alone. |
 
 ### Display hooks

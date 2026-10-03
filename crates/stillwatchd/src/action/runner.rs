@@ -15,7 +15,7 @@ use tokio::sync::Notify;
 
 use super::brightness::BrightnessDimmer;
 use super::hooks::hook_spec;
-use super::targets::resolve_outputs;
+use super::targets::{is_strict_subset, resolve_outputs};
 use crate::process::CommandRunner;
 
 /// The blankers, dimmers, session, and helpers [`ActionRunner`] calls.
@@ -255,16 +255,33 @@ impl ActionRunner {
         outputs: &[String],
         method: BlankMethod,
     ) -> Result<(), BackendError> {
+        // KWin applies DPMS to every output. A strict subset must not be sent.
+        if method == BlankMethod::Dpms && self.partial_dpms(outputs) {
+            tracing::warn!(
+                targets = %outputs.join(","),
+                "KWin DPMS blanks every output, so a partial target list is blanked with the overlay"
+            );
+            return self.overlay_fallback(outputs).await;
+        }
         match self.blanker(method).blank(outputs).await {
             Ok(()) => Ok(()),
             Err(error) if method != BlankMethod::Overlay => {
                 tracing::warn!(%error, method = method.as_str(), "blank failed, using overlay");
-                self.inner.backends.overlay.blank(outputs).await?;
-                self.record_overlay_used().await;
-                Ok(())
+                self.overlay_fallback(outputs).await
             }
             Err(error) => Err(error),
         }
+    }
+
+    async fn overlay_fallback(&self, outputs: &[String]) -> Result<(), BackendError> {
+        self.inner.backends.overlay.blank(outputs).await?;
+        self.record_overlay_used().await;
+        Ok(())
+    }
+
+    fn partial_dpms(&self, outputs: &[String]) -> bool {
+        let connected = lock(&self.inner.connected);
+        is_strict_subset(outputs, &connected)
     }
 
     async fn unblank(&self, outputs: &[String]) {

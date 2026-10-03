@@ -8,8 +8,10 @@
 //! **`KWin` 6.7.5 applies DPMS to the whole workspace.** Its
 //! `org_kde_kwin_dpms.set` ignores which output it was sent for, so a request
 //! for any one output turns every output off (and any input wakes them all).
-//! The blanker still excludes non-target outputs, which is correct for
-//! compositors that honor it, but on `KWin` 6.7.5 they turn off too.
+//! [`ActionRunner`](super::ActionRunner) does not send a partial target list
+//! here. It blanks those outputs with the overlay instead. A direct `blank`
+//! still excludes non-targets, which is correct for compositors that honor
+//! it, but on `KWin` 6.7.5 they turn off too.
 //!
 //! [`watch`](Blanker::watch) reports `Event::DisplayPower` for each output:
 //! its state once when first seen (on connect, or when it's plugged in), then

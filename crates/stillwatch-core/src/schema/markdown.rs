@@ -143,6 +143,8 @@ mod tests {
             "- Default: `\"dpms\"`\n- Values:\n  - `dpms`: Turn the signal off through the \
              compositor."
         ));
+        assert!(docs.contains("partial DPMS becomes an overlay blank of the targets."));
+        assert!(docs.contains("A partial target list is blanked with the overlay instead."));
     }
 
     #[test]

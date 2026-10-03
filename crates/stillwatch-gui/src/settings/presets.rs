@@ -17,6 +17,10 @@ pub const OLED_TV_BLANK_HOOK: &str = "lg-webos-cli screen-off";
 /// Example `on_resume_cmd` paired with [`OLED_TV_BLANK_HOOK`].
 pub const OLED_TV_RESUME_HOOK: &str = "lg-webos-cli screen-on";
 
+/// Shown while reviewing the mixed OLED + LCD preset.
+pub const MIXED_HELP: &str =
+    "KWin DPMS cannot spare the LCD. This preset blanks the monitored outputs with the overlay.";
+
 /// One key a preset would change, as the form currently shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyChange {
@@ -101,7 +105,11 @@ pub fn owned_keys(kind: PresetKind) -> &'static [&'static str] {
             "action.on_blank_cmd",
             "action.on_resume_cmd",
         ],
-        PresetKind::Mixed => &["stale.monitored_outputs", "action.outputs"],
+        PresetKind::Mixed => &[
+            "stale.monitored_outputs",
+            "action.outputs",
+            "action.blank_method",
+        ],
         PresetKind::Custom => &[],
     }
 }
@@ -122,6 +130,7 @@ fn targets(kind: PresetKind, mixed: &[String]) -> Vec<(&'static str, FieldValue)
         PresetKind::Mixed => vec![
             ("stale.monitored_outputs", FieldValue::List(mixed.to_vec())),
             ("action.outputs", text("monitored")),
+            ("action.blank_method", text("overlay")),
         ],
         PresetKind::Custom => Vec::new(),
     }
