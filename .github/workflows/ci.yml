@@ -59,7 +59,11 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    container: archlinux:latest
+    container:
+      image: archlinux:latest
+      # kwin_wayland has the cap_sys_nice file capability; exec fails with EPERM
+      # when the container's bounding set lacks it.
+      options: --cap-add=SYS_NICE --privileged -v /lib/modules:/lib/modules:ro
     env:
       # Private-bus D-Bus tests fail instead of skipping when dbus-daemon is missing.
       STILLWATCH_REQUIRE_DBUS: "1"
@@ -70,6 +74,25 @@ jobs:
         run: pacman -Syu --noconfirm --needed git
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+
+      - name: probe vgem
+        continue-on-error: true
+        run: |
+          set -x
+          uname -r
+          pacman -S --noconfirm --needed kmod
+          ls /lib/modules/
+          find /lib/modules/$(uname -r) -name 'vgem*' -o -name 'vkms*'
+          modprobe vgem
+          ls -la /sys/class/drm/ /dev/dri || true
+          mkdir -p /dev/dri
+          for d in /sys/class/drm/card* /sys/class/drm/renderD*; do
+            [ -e "$d/dev" ] || continue
+            IFS=: read -r major minor < "$d/dev"
+            [ -e "/dev/dri/$(basename "$d")" ] || mknod -m 666 "/dev/dri/$(basename "$d")" c "$major" "$minor"
+          done
+          ls -la /dev/dri
+          cat /sys/class/drm/*/device/uevent 2>/dev/null || true
 
       - name: Tests and coverage thresholds
         run: cargo xtask coverage
