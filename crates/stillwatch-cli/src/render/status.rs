@@ -38,11 +38,7 @@ pub fn render(status: &StatusPayload, style: &Style) -> String {
         "not playing"
     };
     lines.push(line("media", media));
-    let capture = status
-        .capture_backend
-        .as_deref()
-        .unwrap_or("none (input idle only)");
-    lines.push(line("capture", capture));
+    lines.extend(backends(status));
     lines.extend(last_check(status.last_detection.as_ref(), style));
     if let Some(panel) = &status.panel_care {
         lines.push(line("panel care", &panel_care(panel, style)));
@@ -51,6 +47,29 @@ pub fn render(status: &StatusPayload, style: &Style) -> String {
     let mut out = lines.join("\n");
     out.push('\n');
     out
+}
+
+fn backends(status: &StatusPayload) -> Vec<String> {
+    let Some(report) = &status.backends else {
+        let capture = status
+            .capture_backend
+            .as_deref()
+            .unwrap_or("none (input idle only)");
+        return vec![line("capture", capture)];
+    };
+    vec![
+        line("idle source", &report.idle),
+        line(
+            "capture",
+            &with_why(&report.capture, &report.capture_reason),
+        ),
+        line("blank", &with_why(&report.blank, &report.blank_reason)),
+        line("prompt", &with_why(&report.prompt, &report.prompt_reason)),
+    ]
+}
+
+fn with_why(name: &str, why: &str) -> String {
+    format!("{name} ({why})")
 }
 
 fn line(label: &str, value: &str) -> String {

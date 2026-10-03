@@ -1,14 +1,15 @@
 //! Spawns the real `stillwatchd` binary and drives it with signals.
 //!
-//! The child gets a private session bus and an empty runtime dir, so it
-//! never talks to the desktop's Wayland socket or session bus.
+//! The child runs inside a headless `KWin` sandbox (`stillwatch_testkit::kwin`),
+//! so startup can see `ext-idle-notify` v2. It never talks to the desktop
+//! session, and the idle timeout stays at the default so nothing blanks.
 
 use std::io::{self, BufRead, BufReader, Lines};
 use std::process::{Child, ChildStderr, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use stillwatch_testkit::PrivateBus;
+use stillwatch_testkit::kwin::{Kwin, KwinOptions};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -18,32 +19,26 @@ struct Daemon {
     child: Child,
     stderr: Lines<BufReader<ChildStderr>>,
     started: String,
-    _bus: PrivateBus,
-    _state: tempfile::TempDir,
-    _runtime: tempfile::TempDir,
+    _kwin: Kwin,
 }
 
 impl Daemon {
     fn spawn() -> Result<Option<Self>, Box<dyn std::error::Error>> {
-        let Some(bus) = PrivateBus::start()? else {
+        let kwin = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(Kwin::start(KwinOptions::default()))?;
+        let Some(kwin) = kwin else {
             return Ok(None);
         };
-        let state = tempfile::tempdir()?;
-        let runtime = tempfile::tempdir()?;
-        let mut child = Command::new(env!("CARGO_BIN_EXE_stillwatchd"))
+        let mut child = kwin
+            .command(env!("CARGO_BIN_EXE_stillwatchd"))
             .args([
                 "--config",
                 "/nonexistent/stillwatch/config.toml",
                 "--log-level",
                 "info",
             ])
-            .env("DBUS_SESSION_BUS_ADDRESS", bus.address())
-            .env("XDG_STATE_HOME", state.path())
-            .env("XDG_RUNTIME_DIR", runtime.path())
-            .env_remove("WAYLAND_DISPLAY")
-            .env_remove("WAYLAND_SOCKET")
-            .env_remove("JOURNAL_STREAM")
-            .env_remove("RUST_LOG")
             .stderr(Stdio::piped())
             .spawn()?;
         let stderr = child
@@ -54,9 +49,7 @@ impl Daemon {
             child,
             stderr: BufReader::new(stderr).lines(),
             started: String::new(),
-            _bus: bus,
-            _state: state,
-            _runtime: runtime,
+            _kwin: kwin,
         };
         daemon.started = daemon.wait_for_line("stillwatchd started")?;
         Ok(Some(daemon))

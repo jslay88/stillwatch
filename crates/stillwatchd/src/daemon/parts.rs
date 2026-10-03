@@ -44,6 +44,15 @@ pub(super) struct Built {
     /// the stream. `None` for `KWin`, which has no sharing indicator.
     pub portal: Option<Arc<dyn CaptureSession>>,
     pub capture_backend: Option<String>,
+    /// Selected backends and why, for `Status()`.
+    pub backends: Option<stillwatch_ipc::status::BackendReport>,
+    /// Blank method that replaces the configured one.
+    pub blank_override: Option<stillwatch_core::command::BlankMethod>,
+    /// Last probe, so a reload can re-select without touching the session
+    /// when the tests leave this empty.
+    pub probe: Option<crate::platform::Probe>,
+    /// Names recorded for the last selection. A repeat is not logged again.
+    pub selected_names: String,
     pub media: Arc<dyn MediaWatcher>,
     pub prompter: Arc<dyn Prompter>,
     pub session: Arc<dyn SessionMonitor>,
@@ -85,16 +94,19 @@ impl Built {
 
 /// Builds the production backends for `config`.
 ///
-/// `auto` and `kwin` try `ScreenShot2`. `portal` opens a `ScreenCast` session
-/// that stays stopped until a capture is wanted. If neither connects, capture
-/// stays empty and the daemon runs on input idle.
+/// Probes the session and selects backends. `auto` uses `KWin` `ScreenShot2` when
+/// it is present and authorized, otherwise the portal, otherwise input idle.
+/// A missing ext-idle-notify v2, or a forced capture backend that isn't
+/// there, fails startup.
 ///
 /// # Errors
 ///
-/// The history ring's state directory can't be resolved.
+/// Idle or a forced capture backend isn't available, or the history ring's
+/// state directory can't be resolved.
 pub(super) async fn assemble(config: &Config) -> anyhow::Result<Built> {
     let clock: Arc<dyn Clock> = Arc::new(TokioClock);
-    let opened = open_capture(config).await;
+    let started = super::platform::startup(config).await?;
+    let opened = started.opened;
     let capture = opened.capture;
     let portal = opened.portal;
     let capture_backend = opened.name;
@@ -103,6 +115,13 @@ pub(super) async fn assemble(config: &Config) -> anyhow::Result<Built> {
         Arc::clone(&clock),
     ));
     let history = HistoryRing::open_default(&config.history)?;
+    let selection = started.selection;
+    if let Err(error) = history
+        .record(selection.history_entry(clock.wall_now()))
+        .await
+    {
+        tracing::warn!(%error, "couldn't record backend selection");
+    }
     let prompter = Arc::new(StylePrompter::session(
         &config.prompt,
         Arc::new(history.clone()),
@@ -117,6 +136,10 @@ pub(super) async fn assemble(config: &Config) -> anyhow::Result<Built> {
         capture,
         portal,
         capture_backend,
+        backends: Some(selection.report()),
+        blank_override: selection.blank_override(),
+        probe: Some(started.probe),
+        selected_names: selection.history_names(),
         media: Arc::new(MprisWatcher::session()),
         prompter: prompter as Arc<dyn Prompter>,
         session: Arc::new(DbusSessionMonitor::new()),
@@ -171,7 +194,7 @@ impl CaptureSession for PortalCapture {
     }
 }
 
-/// What [`open_capture`] connected.
+/// What [`open_choice`] connected.
 pub(super) struct OpenedCapture {
     pub capture: Option<Arc<dyn ScreenCapture>>,
     pub portal: Option<Arc<dyn CaptureSession>>,
@@ -179,7 +202,7 @@ pub(super) struct OpenedCapture {
 }
 
 impl OpenedCapture {
-    fn none() -> Self {
+    pub(super) fn none() -> Self {
         Self {
             capture: None,
             portal: None,
@@ -188,47 +211,66 @@ impl OpenedCapture {
     }
 }
 
-/// `portal` opens `ScreenCast`. `auto` and `kwin` try `ScreenShot2`.
-pub(super) async fn open_capture(config: &Config) -> OpenedCapture {
-    if config.capture.backend == CaptureBackend::Portal {
-        return open_portal().await;
-    }
-    match KwinCapture::connect().await {
-        Ok(capture) => {
-            tracing::info!("using KWin ScreenShot2 capture");
-            OpenedCapture {
-                capture: Some(Arc::new(capture)),
-                portal: None,
-                name: Some("kwin".into()),
+/// Opens the capture backend [`select`](crate::platform::select) already chose.
+///
+/// `auto` tries the portal when `KWin` was selected but then refuses the
+/// connection, and input idle when that fails too. A forced backend returns
+/// the error.
+///
+/// # Errors
+///
+/// The forced backend didn't connect.
+pub(super) async fn open_choice(
+    config: &Config,
+    selection: &crate::platform::Selection,
+) -> anyhow::Result<OpenedCapture> {
+    use crate::platform::CaptureChoice;
+    match selection.capture {
+        CaptureChoice::Kwin { .. } => match open_kwin().await {
+            Ok(opened) => Ok(opened),
+            Err(error) if config.capture.backend == CaptureBackend::Auto => {
+                tracing::warn!(%error, "KWin ScreenShot2 didn't connect; trying portal ScreenCast");
+                open_portal_or_idle().await
             }
-        }
+            Err(error) => Err(error.into()),
+        },
+        CaptureChoice::Portal => match open_portal().await {
+            Ok(opened) => Ok(opened),
+            Err(error) if config.capture.backend == CaptureBackend::Auto => {
+                tracing::warn!(%error, "portal ScreenCast didn't connect; running on input idle only");
+                Ok(OpenedCapture::none())
+            }
+            Err(error) => Err(error.into()),
+        },
+        CaptureChoice::InputIdleOnly | CaptureChoice::Unavailable => Ok(OpenedCapture::none()),
+    }
+}
+
+async fn open_kwin() -> Result<OpenedCapture, stillwatch_core::backend::BackendError> {
+    let capture = KwinCapture::connect().await?;
+    Ok(OpenedCapture {
+        capture: Some(Arc::new(capture)),
+        portal: None,
+        name: Some("kwin".into()),
+    })
+}
+
+async fn open_portal_or_idle() -> anyhow::Result<OpenedCapture> {
+    match open_portal().await {
+        Ok(opened) => Ok(opened),
         Err(error) => {
-            tracing::warn!(
-                %error,
-                "KWin ScreenShot2 capture is unavailable; running on input idle only"
-            );
-            OpenedCapture::none()
+            tracing::warn!(%error, "portal ScreenCast didn't connect; running on input idle only");
+            Ok(OpenedCapture::none())
         }
     }
 }
 
-async fn open_portal() -> OpenedCapture {
-    match PortalCapture::connect().await {
-        Ok(capture) => {
-            tracing::info!("using portal ScreenCast capture");
-            let portal = Arc::new(capture);
-            OpenedCapture {
-                capture: Some(Arc::clone(&portal) as Arc<dyn ScreenCapture>),
-                portal: Some(portal),
-                name: Some("portal".into()),
-            }
-        }
-        Err(error) => {
-            tracing::warn!(
-                %error,
-                "portal capture is unavailable; running on input idle only"
-            );
-            OpenedCapture::none()
-        }
-    }
+async fn open_portal() -> Result<OpenedCapture, stillwatch_core::backend::BackendError> {
+    let capture = PortalCapture::connect().await?;
+    let portal = Arc::new(capture);
+    Ok(OpenedCapture {
+        capture: Some(Arc::clone(&portal) as Arc<dyn ScreenCapture>),
+        portal: Some(portal),
+        name: Some("portal".into()),
+    })
 }

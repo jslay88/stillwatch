@@ -15,7 +15,7 @@ use stillwatch_core::history::HistoryKind;
 use crate::shell::DaemonCall;
 
 /// Kind labels, in pick-list order after "All".
-const KINDS: [(HistoryKind, &str); 13] = [
+const KINDS: [(HistoryKind, &str); 14] = [
     (HistoryKind::Transition, "Transition"),
     (HistoryKind::Prompt, "Prompt"),
     (HistoryKind::Snooze, "Snooze"),
@@ -29,6 +29,7 @@ const KINDS: [(HistoryKind, &str); 13] = [
     (HistoryKind::Migration, "Migration"),
     (HistoryKind::Reconnect, "Reconnect"),
     (HistoryKind::Hotplug, "Hotplug"),
+    (HistoryKind::Backends, "Backends"),
 ];
 
 /// How far back the page asks for.

@@ -305,6 +305,7 @@ fn every_kind_has_a_choice() {
         HistoryKind::Migration,
         HistoryKind::Reconnect,
         HistoryKind::Hotplug,
+        HistoryKind::Backends,
     ];
     let choices = KindFilter::choices();
     assert_eq!(choices[0], KindFilter::All);

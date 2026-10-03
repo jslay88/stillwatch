@@ -22,6 +22,8 @@ pub(super) struct Shared {
     pub errors: Mutex<Vec<String>>,
     /// `kwin` while `ScreenShot2` is usable, otherwise input-idle-only.
     pub capture_backend: Mutex<Option<String>>,
+    /// Selected backends and why.
+    pub backends: Mutex<Option<stillwatch_ipc::status::BackendReport>>,
     /// The capture backend, if one connected.
     pub capture: Mutex<Option<Arc<dyn ScreenCapture>>>,
     /// Portal session for the same backend, when `capture.backend` is portal.
@@ -45,6 +47,7 @@ impl Shared {
             config: Mutex::new(built.config.clone()),
             errors: Mutex::new(Vec::new()),
             capture_backend: Mutex::new(built.capture_backend.clone()),
+            backends: Mutex::new(built.backends.clone()),
             capture: Mutex::new(built.capture.clone()),
             portal: Mutex::new(built.portal.clone()),
             gamepad: Mutex::new(built.gamepad.clone()),

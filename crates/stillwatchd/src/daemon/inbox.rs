@@ -32,4 +32,6 @@ pub(super) enum Incoming {
     /// The test clock moved. Production never sends this.
     #[cfg_attr(not(test), allow(dead_code))]
     Tick,
+    /// The compositor or a watched bus name changed. Probe again.
+    Reprobe,
 }

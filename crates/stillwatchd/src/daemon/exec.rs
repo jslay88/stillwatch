@@ -46,11 +46,14 @@ impl<R: ReloadSignal> Engine<R> {
             }
             Command::ShowPrompt(request) => self.start_prompt(request),
             Command::DismissPrompt => self.dismiss_prompt().await,
-            action @ (Command::Blank { .. } | Command::Lock) => self.spawn_action(action),
+            action @ (Command::Blank { .. } | Command::Lock) => {
+                self.spawn_action(self.rewrite_blank(action));
+            }
             action @ (Command::Unblank { .. } | Command::RunHook(_)) => {
                 self.run_action(&action).await;
             }
             Command::Record(entry) => {
+                let entry = self.rewrite_record(entry);
                 if let Err(error) = self.shared.history.record(entry).await {
                     tracing::warn!(%error, "couldn't record history");
                 }

@@ -34,10 +34,12 @@ use std::time::Duration;
 
 use stillwatch_core::backend::{BackendFuture, Blanker, EventSink};
 
+pub(crate) use buses::{SYSFS_I2C_DEV, gpu_buses};
+pub(crate) use drm::SYSFS_DRM;
 pub use error::DdcError;
 
 use blanker::Shared;
-use drm::{DrmConnectors, SYSFS_DRM};
+use drm::DrmConnectors;
 use i2c::I2cTransport;
 use transport::DdcTransport;
 

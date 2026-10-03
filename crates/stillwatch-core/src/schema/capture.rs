@@ -15,7 +15,8 @@ pub(super) const SECTION: Section = Section {
                 Choice {
                     value: "auto",
                     label: "Automatic",
-                    help: "KWin ScreenShot2 when it's available, otherwise the portal.",
+                    help: "KWin ScreenShot2 when it's present and authorized, otherwise the \
+                           portal, otherwise input idle only.",
                 },
                 Choice {
                     value: "kwin",

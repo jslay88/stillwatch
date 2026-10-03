@@ -19,13 +19,12 @@ use stillwatch_core::detector::BlockDetector;
 use stillwatch_ipc::config_file;
 use stillwatch_ipc::probe::MIN_PROBE_INTERVAL_MS;
 
-use stillwatch_core::config::CaptureBackend;
-
 use crate::args::Args;
 use crate::capture::kwin::KwinCapture;
 use crate::capture::portal::{PortalCapture, Presence};
 use crate::clock::TokioClock;
 use crate::media::MprisWatcher;
+use crate::platform::{self, CaptureChoice};
 use crate::signals::{self, Signals};
 
 pub use emit::run;
@@ -65,8 +64,13 @@ pub async fn run_cli(args: &Args) -> anyhow::Result<()> {
         signals::wait_for_shutdown(&mut signals).await;
     };
     let mut out = std::io::stdout().lock();
-    match config.capture.backend {
-        CaptureBackend::Portal => {
+    let probed = platform::probe_session().await?;
+    let selection = platform::select(&probed, &config);
+    if let Some(message) = selection.startup_failure(&platform::current_exe()) {
+        anyhow::bail!("{message}");
+    }
+    match selection.capture {
+        CaptureChoice::Portal => {
             let capture = PortalCapture::connect()
                 .await
                 .context("portal screen capture")?;
@@ -91,7 +95,7 @@ pub async fn run_cli(args: &Args) -> anyhow::Result<()> {
             capture.set_presence(Presence::Active).await.ok();
             result
         }
-        CaptureBackend::Auto | CaptureBackend::Kwin => {
+        CaptureChoice::Kwin { .. } => {
             let capture = KwinCapture::connect().await?;
             run(
                 &capture,
@@ -103,6 +107,9 @@ pub async fn run_cli(args: &Args) -> anyhow::Result<()> {
                 stop,
             )
             .await
+        }
+        CaptureChoice::InputIdleOnly | CaptureChoice::Unavailable => {
+            anyhow::bail!("{}", selection.capture_reason)
         }
     }
 }

@@ -7,6 +7,27 @@ use serde::{Deserialize, Serialize};
 use stillwatch_core::state::{State, StatusSnapshot};
 use stillwatch_core::stats::DetectionStats;
 
+/// Backends the daemon selected, and why.
+///
+/// Names and short reasons only. No pixels, window titles, or paths.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BackendReport {
+    /// Idle source, such as `ext-idle-notify v2`.
+    pub idle: String,
+    /// `kwin`, `portal`, `input-idle-only`, or `unavailable`.
+    pub capture: String,
+    /// Why that capture backend was picked.
+    pub capture_reason: String,
+    /// Blank method actually used (`dpms`, `overlay`, `ddc_standby`).
+    pub blank: String,
+    /// Why that blank method was picked, including an overlay fallback.
+    pub blank_reason: String,
+    /// `notification` or `dialog`.
+    pub prompt: String,
+    /// Why that prompt was picked.
+    pub prompt_reason: String,
+}
+
 /// Panel care tracking, for status and the GUI.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PanelCareStatus {
@@ -46,6 +67,9 @@ pub struct StatusPayload {
     /// input-idle-only mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capture_backend: Option<String>,
+    /// Selected backends and why. Absent on daemons that don't probe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backends: Option<BackendReport>,
     /// The most recent detector verdict.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_detection: Option<DetectionStats>,
@@ -69,6 +93,7 @@ impl StatusPayload {
             locked: false,
             media_playing: false,
             capture_backend: None,
+            backends: None,
             last_detection: None,
             config_errors: Vec::new(),
             panel_care: None,

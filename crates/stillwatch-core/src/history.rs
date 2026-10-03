@@ -46,6 +46,8 @@ pub enum HistoryKind {
     /// An output was added (`count` 1) or removed (`count` 0). `output` is
     /// the connector name.
     Hotplug,
+    /// The daemon picked backends. `backends` names them.
+    Backends,
 }
 
 /// Which prompt was actually shown, for [`HistoryKind::Prompt`] entries
@@ -196,6 +198,10 @@ pub struct HistoryEntry {
     /// it was removed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u32>,
+    /// Selected backend names, for [`HistoryKind::Backends`]. Names only
+    /// (`ext-idle-notify-v2`, `kwin`, `dpms`, `notification`), never pixels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backends: Option<String>,
     /// Media, gamepad, and lock state at decision time.
     #[serde(flatten)]
     pub context: DecisionContext,
@@ -222,6 +228,7 @@ impl HistoryEntry {
             to_version: None,
             output: None,
             count: None,
+            backends: None,
             context: DecisionContext::default(),
         }
     }
@@ -312,6 +319,13 @@ impl HistoryEntry {
     #[must_use]
     pub const fn with_count(mut self, count: u32) -> Self {
         self.count = Some(count);
+        self
+    }
+
+    /// Attaches the selected backend names.
+    #[must_use]
+    pub fn with_backends(mut self, backends: impl Into<String>) -> Self {
+        self.backends = Some(backends.into());
         self
     }
 }

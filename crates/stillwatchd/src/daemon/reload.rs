@@ -36,13 +36,10 @@ impl<R: ReloadSignal> Engine<R> {
         *lock(&self.shared.prompt) = config.prompt.clone();
         *lock(&self.shared.config) = config.clone();
         if capture_changed {
-            self.stop_capture().await;
-            let opened = super::parts::open_capture(&config).await;
-            self.capture_warned = opened.capture.is_none();
-            *lock(&self.shared.capture) = opened.capture;
-            *lock(&self.shared.portal) = opened.portal;
-            *lock(&self.shared.capture_backend) = opened.name;
+            self.refresh_capture(&config, true).await;
             self.publish_outputs().await;
+        } else {
+            self.reselect(&config).await;
         }
         if self.gamepad_on != config.activity.gamepad {
             self.gamepad_on = config.activity.gamepad;

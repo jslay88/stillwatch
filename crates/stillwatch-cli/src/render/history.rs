@@ -74,6 +74,7 @@ const fn event(kind: HistoryKind) -> &'static str {
         HistoryKind::Migration => "config migrated",
         HistoryKind::Reconnect => "reconnect",
         HistoryKind::Hotplug => "hotplug",
+        HistoryKind::Backends => "backends",
     }
 }
 
@@ -133,6 +134,9 @@ fn details(entry: &HistoryEntry) -> Vec<String> {
     }
     if let Some(count) = entry.count {
         parts.push(count.to_string());
+    }
+    if let Some(backends) = &entry.backends {
+        parts.push(backends.clone());
     }
     parts
 }
