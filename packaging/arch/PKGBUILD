@@ -1,0 +1,82 @@
+# Maintainer: Justin Slay <justin.slay@gmail.com>
+#
+# Build from a checkout: cd packaging/arch && makepkg -si
+#
+# prepare runs `cargo fetch --locked`. build runs
+# `cargo build --release --offline --locked`. package() copies files.
+# It does not enable the user unit, start the daemon, or point config
+# at the example hooks. Those hooks land under
+# /usr/share/doc/stillwatch/hooks/ as documentation.
+#
+# pkgver tracks workspace.package.version in the repo Cargo.toml.
+
+pkgname=stillwatch
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='OLED burn-in protection for Wayland'
+arch=(x86_64)
+url='https://github.com/jslay88/stillwatch'
+license=('MIT OR Apache-2.0')
+depends=(kscreen dbus pipewire xdg-desktop-portal)
+makedepends=(cargo)
+optdepends=(
+    'ddcutil: DDC/CI standby needs the i2c-dev module; ddcutil loads it and can probe the bus'
+    'kdialog: dialog prompt fallback'
+)
+options=(!debug !lto)
+source=()
+sha256sums=()
+
+# This file is packaging/arch/PKGBUILD. Strip those two directories.
+# parsepkgbuild sources this in rbash, so the top level can't call cd
+# or any command whose name contains a slash.
+_repo="${BASH_SOURCE[0]%/*}"
+_repo="${_repo%/*/*}"
+
+prepare() {
+    [[ $_repo == /* ]] || { echo "stillwatch PKGBUILD: path $_repo is not absolute" >&2; return 1; }
+    cd "$_repo"
+    export CARGO_HOME="$srcdir/cargo-home"
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$_repo"
+    export CARGO_HOME="$srcdir/cargo-home"
+    export CARGO_TARGET_DIR="$srcdir/target"
+    cargo build --release --offline --locked \
+        -p stillwatchd -p stillwatch-cli -p stillwatch-gui
+}
+
+package() {
+    cd "$_repo"
+    local bin hook icon rel target="$srcdir/target"
+
+    for bin in stillwatchd stillwatch stillwatch-gui; do
+        install -Dm755 "$target/release/$bin" "$pkgdir/usr/bin/$bin"
+    done
+
+    install -Dm644 packaging/stillwatch.service \
+        "$pkgdir/usr/lib/systemd/user/stillwatch.service"
+    install -Dm644 packaging/io.github.jslay88.Stillwatch.desktop \
+        "$pkgdir/usr/share/applications/io.github.jslay88.Stillwatch.desktop"
+    # ScreenShot2 grant. Exec= is /usr/bin/stillwatchd, the binary above.
+    install -Dm644 packaging/io.github.jslay88.Stillwatch.Daemon.desktop \
+        "$pkgdir/usr/share/applications/io.github.jslay88.Stillwatch.Daemon.desktop"
+    install -Dm644 packaging/io.github.jslay88.Stillwatch.Tray.desktop \
+        "$pkgdir/usr/share/stillwatch/io.github.jslay88.Stillwatch.Tray.desktop"
+
+    while IFS= read -r -d '' icon; do
+        rel="${icon#packaging/icons/}"
+        install -Dm644 "$icon" "$pkgdir/usr/share/icons/$rel"
+    done < <(find packaging/icons -type f -print0)
+
+    install -Dm644 README.md "$pkgdir/usr/share/doc/stillwatch/README.md"
+    install -Dm644 docs/config.md "$pkgdir/usr/share/doc/stillwatch/config.md"
+    for hook in packaging/hooks/*.sh; do
+        install -Dm755 "$hook" "$pkgdir/usr/share/doc/stillwatch/hooks/${hook##*/}"
+    done
+
+    install -Dm644 LICENSE-MIT "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MIT"
+    install -Dm644 LICENSE-APACHE "$pkgdir/usr/share/licenses/$pkgname/LICENSE-APACHE"
+}

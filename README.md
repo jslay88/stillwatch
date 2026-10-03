@@ -1,87 +1,33 @@
 # Stillwatch
 
-Protects OLED panels from burn-in on Linux Wayland. Stillwatch detects real input idle, confirms the screen is showing static content, warns you with a snooze option, and then blanks the display.
+Protects OLED panels from burn-in on Linux Wayland. Desktop idle timers never fire while a video player, a browser, or a call holds an idle inhibitor, so the panel stays on a static image. Stillwatch watches real input idle (`ext-idle-notify-v1` v2, which ignores inhibitors), confirms the picture is actually static, prompts with a snooze, and then blanks the display.
 
-Work in progress.
+## How it decides
 
-## Usage
+Each output is split into a block grid. A block counts as persistent once it has stayed unchanged for `persist_checks` captures in a row, so video and animation don't trip it. The default stale threshold is 70% of the counted blocks. That is lower than an area-only check would need, because the per-block wait already rejected motion, and a call with a few video tiles over a static screen should still blank.
 
-```
-stillwatch status [--json]
-stillwatch snooze <DURATION>          # e.g. 45m, 1h30m
-stillwatch cancel-snooze
-stillwatch pause
-stillwatch resume
-stillwatch reload
-stillwatch history [--since <DURATION>] [--json]
-stillwatch probe [--interval <DURATION>] [--count <N>] [--json] [--standalone]
-stillwatch idle-test [--timeout <DURATION>] # alias --minutes, a bare number is minutes
-stillwatch config init [--force] [PATH]
-stillwatch config check [PATH]
+Blocks darker than `ignore_dark_below` (default 16) in both the previous and the current capture are left out of the count. Black OLED pixels are off and don't wear, so letterboxing and a dark wallpaper aren't burn-in. An all-dark screen is never stale.
 
-stillwatch-gui                  # tray; open the window from the menu
-stillwatch-gui settings          # tray, and the settings window immediately
-stillwatch-gui prompt            # tray, and the prompt placeholder
-```
+Pixels can't tell a windowed video you're watching from a video call left running. While a non-ignored MPRIS player is Playing, the threshold rises to `media_stale_percent` (default 90). Audio-only players (Spotify by default) don't raise it.
 
-`stillwatch <command> --help` has details. Durations use [humantime](https://docs.rs/humantime) syntax (`90s`, `45m`, `1h 30m`).
+## Desktops and backends
 
-Everything except `idle-test`, `config`, and `probe --standalone` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
+KDE Plasma on KWin is the desktop this is built for. Other Wayland compositors can capture through the portal. DPMS blanking goes through `kscreen-doctor`, so that path is KWin.
 
-`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. The Settings, Calibration, History, and Service pages are placeholders for now, and so is `prompt`.
-
-- **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
-- **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.
-- **`cancel-snooze`**, **`pause`**, **`resume`**: what they say.
-- **`reload`**: makes the daemon reload its config file and prints the result. If the new config is invalid, the problems are printed one per line, the daemon keeps the last good config, and the exit code is 1.
-- **`history`**: a table of recent decisions (time, event, state change, per-output persistent percentages with the threshold and reason, snooze/blank/answer details, and media/gamepad/lock context), oldest first. `--since 2h` limits it to the last two hours. `--json` prints one `HistoryEntry` per line.
-- **`probe`**: live calibration. Shows each output's block grid (`██` persistent, `░░` changed, `··` dark, `xx` ignored) with a summary line like `HDMI-A-1: persistent 72% (dark 18%, counted 230/256), threshold 70% normal -> STALE`. The interval defaults to `stale.check_interval_seconds` from the config file; `--interval 5s` is handy while tuning (100ms minimum). Runs until Ctrl-C or `--count` samples. `--json` prints one `ProbeSample` per line. `--standalone` starts `stillwatchd --probe` (the installed binary KWin has to authorize) and renders those lines; without it the running daemon is asked over D-Bus. Only block states and percentages leave the process, never pixels.
-
-Colors are used only when stdout is a terminal and `NO_COLOR` isn't set.
-
-Exit codes are the same for every command:
-
-| Code | Meaning |
+| Piece | What it uses |
 | -- | -- |
-| 0 | Success |
-| 1 | The command failed: the daemon refused it (the message says why), the config is invalid, or something else went wrong |
-| 2 | Usage error (bad flags or arguments) |
-| 3 | `stillwatchd` isn't running (`systemctl --user start stillwatch`) |
+| Input idle | `ext-idle-notify-v1` v2. A compositor that only has v1 doesn't count. Gamepads are evdev (compositors don't treat them as input). |
+| Capture | `auto`: KWin `org.kde.KWin.ScreenShot2` when it's there, otherwise xdg-desktop-portal ScreenCast over PipeWire. The portal stream only runs while you're away. |
+| Blank | `dpms` (`kscreen-doctor`), `ddc_standby` (MCCS power mode, VCP 0xD6, over DDC/CI), or a black layer-shell overlay. The overlay works on any compositor with layer-shell and keeps the panel on. |
+| Prompt | A notification with snooze actions. `kdialog` is the fallback, and the Custom... duration. |
+| Session | logind lock and sleep, plus `org.freedesktop.ScreenSaver`. |
+| Media | MPRIS `PlaybackStatus` only. |
 
-`stillwatch idle-test` runs the daemon's idle and gamepad sources locally, no daemon needed, and prints a timestamped line each time the combined state changes: `idle`, `active (keyboard/mouse)`, or `active (gamepad: <name>)`. You only count as idle once the compositor reports input idle and no gamepad has moved past the deadzone for the timeout (default `idle.input_idle_minutes`). Ctrl-C stops it.
-
-```
-$ stillwatch idle-test --minutes 1
-Watching keyboard, mouse, and gamepads with a 1m idle timeout. Ctrl-C to stop.
-2026-10-02 20:41:07  idle
-2026-10-02 20:41:30  active (gamepad: Xbox Wireless Controller)
-2026-10-02 20:42:30  idle
-2026-10-02 20:42:51  active (keyboard/mouse)
-```
-
-The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`), `--log-level <LEVEL>`, `--capture-check <OUTPUT>` (see below), and `--probe [--interval <DURATION>] [--count <N>]` (JSON lines for `stillwatch probe --standalone`). The log level comes from `--log-level`, then `RUST_LOG`, then `info` (the config's `logging.level` will slot in before the default once the daemon loads its config). Under systemd it logs to the journal, otherwise to stderr.
-
-## Display hooks
-
-`action.on_blank_cmd` and `action.on_resume_cmd` run as `sh -c` after a blank and on wake. They are fire-and-forget: a 10 second timeout, failures only go to the log, and they never hold up the state machine. `action.command` (when `action.mode = "command"`) uses the same runner and does not blank.
-
-Each hook gets:
-
-| Variable | Example | Meaning |
-| -- | -- | -- |
-| `STILLWATCH_OUTPUTS` | `HDMI-A-1,DP-1` | Connector names being acted on |
-| `STILLWATCH_METHOD` | `dpms` | `dpms`, `overlay`, or `ddc_standby` |
-| `STILLWATCH_REASON` | `blank` | `blank`, `resume`, `command`, or `panel_care` |
-
-```toml
-[action]
-on_blank_cmd = "lg-webos-cli screen-off"
-on_resume_cmd = "lg-webos-cli screen-on"
-```
+If capture isn't available, the daemon keeps running on input idle alone.
 
 ## Install
 
-`cargo xtask install` builds the release binaries and installs them with the systemd user unit, desktop files, and icons. It does not enable the unit or start `stillwatchd`.
+`cargo xtask install` builds the release binaries and installs them with the systemd user unit, desktop files, and icons. It does not enable the unit, start `stillwatchd`, or copy the example hooks into the config.
 
 ```sh
 cargo xtask install                  # prefix ~/.local
@@ -116,16 +62,27 @@ There is no D-Bus activation file. A bus activation would start `stillwatchd` on
 
 The tray does not autostart on install. Copy `io.github.jslay88.Stillwatch.Tray.desktop` from `<prefix>/share/stillwatch/` to `~/.config/autostart/` when you want the tray at login. The settings launcher is the desktop file in `share/applications`.
 
-Icons: `io.github.jslay88.Stillwatch` is the app icon. Status icons `io.github.jslay88.Stillwatch-{down,active,monitoring,prompting,snoozed,acting,blanked,locked,paused}` are the tray states (same colors as the pixmaps).
+Icons: `io.github.jslay88.Stillwatch` is the app icon. Status icons `io.github.jslay88.Stillwatch-{down,active,monitoring,prompting,snoozed,acting,blanked,locked,paused}` are the tray states.
 
 `cargo xtask uninstall` removes the files and prints `systemctl --user disable --now stillwatch && systemctl --user daemon-reload`. It does not run that, and it does not stop a daemon that is already up.
 
-## Screen capture on KDE
+### Arch
 
-On KDE, Stillwatch captures the screen through KWin's `org.kde.KWin.ScreenShot2` D-Bus interface. There's no screen-sharing indicator or prompt, but KWin only answers programs it has authorized, and that's done with a `.desktop` file:
+[`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) builds this checkout. `prepare` fetches crates with `cargo fetch --locked`. `build` is `cargo build --release --offline --locked`. It needs Rust 1.99 (`rust`/`cargo`, or the asdf toolchain in [`.tool-versions`](.tool-versions)).
 
-- `cargo xtask install` writes [`packaging/io.github.jslay88.Stillwatch.Daemon.desktop`](packaging/io.github.jslay88.Stillwatch.Daemon.desktop) into the prefix's `share/applications/` with `Exec=` set to the installed `stillwatchd`. For a hand install, copy that file into `~/.local/share/applications/` (just you) or `/usr/share/applications/` (system wide) and edit `Exec=` if the binary is not `/usr/bin/stillwatchd`. Any `applications/` directory under `$XDG_DATA_HOME` or `$XDG_DATA_DIRS` works.
-- `Exec=` has to be the absolute path of the `stillwatchd` that runs. The shipped file says `/usr/bin/stillwatchd`; if yours lives somewhere else (`~/.cargo/bin/stillwatchd`, a build directory), edit `Exec=` to that full path. `~` and bare command names don't work.
+```sh
+cd packaging/arch
+makepkg -si
+```
+
+The package depends on `kscreen`, `dbus`, `pipewire`, and `xdg-desktop-portal`. `ddcutil` is optional: `ddc_standby` talks DDC/CI itself, and it needs the `i2c-dev` module, which is what the `ddcutil` package loads and what you probe the bus with. `kdialog` is optional, for the dialog prompt. The package installs the binaries, the user unit, the desktop files (the ScreenShot2 grant's `Exec=` is `/usr/bin/stillwatchd`), icons, `README.md`, [`docs/config.md`](docs/config.md), the example hooks under `/usr/share/doc/stillwatch/hooks/`, and both license files. It does not enable the unit. After it installs, run the same `systemctl --user` line as above.
+
+## First run
+
+On KDE, capture goes through KWin's `org.kde.KWin.ScreenShot2`. There's no screen-sharing indicator, but KWin only answers programs it has authorized. That's a `.desktop` file:
+
+- `cargo xtask install` and the PKGBUILD both install [`packaging/io.github.jslay88.Stillwatch.Daemon.desktop`](packaging/io.github.jslay88.Stillwatch.Daemon.desktop) into `share/applications/` with `Exec=` set to the installed `stillwatchd`. For a hand install, copy that file into `~/.local/share/applications/` (just you) or `/usr/share/applications/` (system wide) and edit `Exec=` if the binary is not `/usr/bin/stillwatchd`. Any `applications/` directory under `$XDG_DATA_HOME` or `$XDG_DATA_DIRS` works.
+- `Exec=` has to be the absolute path of the `stillwatchd` that runs. The shipped file says `/usr/bin/stillwatchd`. `~` and bare command names don't work.
 - `X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2` is the line that grants access. The file name doesn't matter, and `NoDisplay=true` keeps it out of menus.
 
 How KWin matches it: it reads the caller's `/proc/<pid>/exe`, then looks for an installed application whose first `Exec=` word resolves (following symlinks) to exactly that path. Arguments after the path are ignored. A copy of the binary somewhere else doesn't match.
@@ -135,9 +92,61 @@ Things that trip it up:
 - KWin notices new and removed `.desktop` files right away, but not edits to an existing one. After editing, remove and re-add the file, or `touch ~/.local/share/applications`.
 - If the `stillwatchd` binary is replaced while it's running (an upgrade or a rebuild), KWin sees `/proc/<pid>/exe` as `... (deleted)` and refuses it. Restart the daemon.
 
-To check it, `stillwatchd --capture-check HDMI-A-1` captures that output once and prints only its size, format, and the luma grid it was downscaled to, or the error with what to fix. The daemon also checks once at startup and logs the result. Without authorization it keeps running on input idle alone.
+Check it with `stillwatchd --capture-check HDMI-A-1`. That captures the output once and prints its size, format, and the luma grid it was downscaled to, or the error and what to fix. The daemon also checks once at startup and logs the result.
 
-## Calibrating detection
+Then:
+
+```sh
+stillwatch config init
+systemctl --user daemon-reload && systemctl --user enable --now stillwatch
+```
+
+`config init` writes a commented default to `~/.config/stillwatch/config.toml`. The daemon runs on defaults if the file isn't there yet. Enabling the unit is the step that starts it. Install doesn't.
+
+## Configuration
+
+Every key is in [`docs/config.md`](docs/config.md). `stillwatch config check` validates a file without the daemon. The settings window edits the same file; the daemon reloads it.
+
+Unknown keys are rejected. Most changes apply on reload. `capture.backend`, `stale.block_grid`, and `stale.monitored_outputs` rebuild capture and reset the block counters.
+
+### Display presets
+
+A preset writes ordinary keys. There is no `profile` field in the file.
+
+| Setup | What to set |
+| -- | -- |
+| OLED monitor | `blank_method = "dpms"`, `reblank_on_wake = true`, `reblank_fallback = "overlay"`. DPMS lets the panel reach standby, so its own compensation cycle can run. If a display wakes itself when the HDMI link drops, the re-blank watchdog blanks it again, and the overlay is the fallback that keeps the signal alive. |
+| OLED TV | `blank_method = "overlay"`, which leaves the TV on but covers it. Or `dpms` plus an `on_blank_cmd` / `on_resume_cmd` hook that tells the TV to turn its own screen off. The overlay blocks panel compensation because the panel stays powered. |
+| Mixed OLED and LCD | Put the OLED connector names in `stale.monitored_outputs` and set `outputs = "monitored"`. LCDs are left out of detection and out of the blank. |
+| Custom | Leave the keys alone. |
+
+### Display hooks
+
+`action.on_blank_cmd` and `action.on_resume_cmd` run as `sh -c` after a blank and on wake. They are fire-and-forget: a 10 second timeout, failures only go to the log, and they never hold up the state machine. `action.command` (when `action.mode = "command"`) uses the same runner and does not blank. `panel_care.trigger_cmd` uses it at blank time when panel care is due.
+
+The examples in [`packaging/hooks/`](packaging/hooks/) are not installed as active hooks. `cargo xtask install` doesn't copy them. The PKGBUILD puts them in `/usr/share/doc/stillwatch/hooks/` and still doesn't point the config at them. The path in the config has to be absolute.
+
+Each script documents the environment Stillwatch sets:
+
+| Variable | Example | Meaning |
+| -- | -- | -- |
+| `STILLWATCH_OUTPUTS` | `HDMI-A-1,DP-1` | Connector names being acted on |
+| `STILLWATCH_METHOD` | `dpms` | `dpms`, `overlay`, or `ddc_standby` |
+| `STILLWATCH_REASON` | `blank` | `blank`, `resume`, `command`, or `panel_care` |
+
+[lg-webos-off.sh](packaging/hooks/lg-webos-off.sh) and [lg-webos-on.sh](packaging/hooks/lg-webos-on.sh) call `lgtv screenOff` / `lgtv screenOn` ([LGWebOSRemote](https://github.com/klattimer/LGWebOSRemote)). Pair the TV once with `lgtv auth` before relying on them.
+
+[cec-standby.sh](packaging/hooks/cec-standby.sh) and [cec-on.sh](packaging/hooks/cec-on.sh) send standard HDMI-CEC standby and image-view-on. They use `cec-ctl` when it's installed, otherwise `cec-client`. `CEC_DEVICE` picks the cec-ctl adapter (default `/dev/cec0`). One adapter, not one command per connector.
+
+```toml
+[action]
+on_blank_cmd = "/usr/share/doc/stillwatch/hooks/lg-webos-off.sh"
+on_resume_cmd = "/usr/share/doc/stillwatch/hooks/lg-webos-on.sh"
+```
+
+From a checkout, use the repo path instead of `/usr/share/doc/...`.
+
+## Calibration
 
 `stillwatch probe` is how you tune `stale_percent`, `persist_checks`, `luma_delta_threshold`, `ignore_dark_below`, and `ignore_regions`. It shows the block grid the detector is using, not a screenshot.
 
@@ -155,21 +164,122 @@ The summary line is the stale fraction the daemon will use: `persistent 72% (dar
 
 `--json` never includes luma values or pixels. Only per-block states (`changed`, `persistent`, `dark`, `ignored`) and the percentages above.
 
-## Development
+The GUI Calibration page is that grid as a heatmap. The page is still a placeholder, so probe is the calibration tool that runs today. `ignore_regions` in the settings schema is drawn on the same heatmap once the page exists.
 
-Toolchains come from [asdf](https://asdf-vm.com/) (`.tool-versions`). The quality gates also need `cargo-nextest`, `cargo-llvm-cov`, `cargo-deny`, `cargo-machete`, and `jscpd` (`npm install -g jscpd`).
+## CLI
+
+```
+stillwatch status [--json]
+stillwatch snooze <DURATION>          # e.g. 45m, 1h30m
+stillwatch cancel-snooze
+stillwatch pause
+stillwatch resume
+stillwatch reload
+stillwatch history [--since <DURATION>] [--json]
+stillwatch probe [--interval <DURATION>] [--count <N>] [--json] [--standalone]
+stillwatch idle-test [--timeout <DURATION>] # alias --minutes, a bare number is minutes
+stillwatch config init [--force] [PATH]
+stillwatch config check [PATH]
+
+stillwatch-gui                  # tray; open the window from the menu
+stillwatch-gui settings          # tray, and the settings window immediately
+stillwatch-gui prompt            # tray, and the prompt placeholder
+```
+
+`stillwatch <command> --help` has details. Durations use [humantime](https://docs.rs/humantime) syntax (`90s`, `45m`, `1h 30m`).
+
+Everything except `idle-test`, `config`, and `probe --standalone` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
+
+`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. Settings is the schema-driven form. Calibration, History, Service, and `prompt` are still placeholders.
+
+- **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
+- **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.
+- **`cancel-snooze`**, **`pause`**, **`resume`**: what they say.
+- **`reload`**: makes the daemon reload its config file and prints the result. If the new config is invalid, the problems are printed one per line, the daemon keeps the last good config, and the exit code is 1.
+- **`history`**: see [Decision history](#decision-history).
+- **`probe`**: see [Calibration](#calibration).
+- **`idle-test`**: runs the daemon's idle and gamepad sources locally, no daemon needed, and prints a timestamped line each time the combined state changes: `idle`, `active (keyboard/mouse)`, or `active (gamepad: <name>)`. You only count as idle once the compositor reports input idle and no gamepad has moved past the deadzone for the timeout (default `idle.input_idle_minutes`). Ctrl-C stops it.
+- **`config init`** / **`config check`**: write or validate the config file.
+
+```
+$ stillwatch idle-test --minutes 1
+Watching keyboard, mouse, and gamepads with a 1m idle timeout. Ctrl-C to stop.
+2026-10-02 20:41:07  idle
+2026-10-02 20:41:30  active (gamepad: Xbox Wireless Controller)
+2026-10-02 20:42:30  idle
+2026-10-02 20:42:51  active (keyboard/mouse)
+```
+
+The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`), `--log-level <LEVEL>`, `--capture-check <OUTPUT>`, and `--probe [--interval <DURATION>] [--count <N>]` (JSON lines for `stillwatch probe --standalone`). The log level comes from `--log-level`, then `RUST_LOG`, then `info`. Under systemd it logs to the journal, otherwise to stderr.
+
+Colors are used only when stdout is a terminal and `NO_COLOR` isn't set.
+
+Exit codes are the same for every command:
+
+| Code | Meaning |
+| -- | -- |
+| 0 | Success |
+| 1 | The command failed: the daemon refused it (the message says why), the config is invalid, or something else went wrong |
+| 2 | Usage error (bad flags or arguments) |
+| 3 | `stillwatchd` isn't running (`systemctl --user start stillwatch`) |
+
+## Decision history
+
+`stillwatch history` prints the ring in `~/.local/state/stillwatch/history.jsonl` (oldest first): prompts, blanks, snoozes, the safety ceiling, re-blanks, and reloads. Each row has the time, the event, the state change, per-output persistent percentages with the threshold and why, and the snooze, blank, or answer detail, plus media, gamepad, and lock context.
+
+```
+stillwatch history
+stillwatch history --since 2h
+stillwatch history --json
+```
+
+`--json` prints one `HistoryEntry` per line. The file holds numbers and state names only. No pixels, no window titles, no track metadata. `history.max_entries` (default 1000) drops the oldest first. The GUI History page reads the same file once that page exists. `stillwatch probe` is not history: probe is live, history is what already happened.
+
+## Panel care
+
+Stillwatch does not draw a pixel-exercise pattern. Lighting pixels only adds wear, and the "burn-in fix" patterns work by wearing down the healthy ones. There is no standard DDC or CEC pixel-cleaning command. Vendor codes that aren't in a published spec are unsafe to send (they can brick a panel), so none are built in.
+
+What it does instead is let the panel's own compensation cycle run. Most OLEDs do that in real standby after they've been on for a while (Pixel Cleaning, on some monitors). Prefer `dpms` or `ddc_standby` over the overlay. The overlay keeps the signal up, so the panel stays on and the cycle doesn't start.
+
+`[panel_care]` tracks screen-on time. `min_standby_minutes` in real standby resets the counter. The overlay doesn't. After `reminder_hours` (default 4) it reminds you to turn the display off. `trigger_cmd` runs at blank time when that threshold is due, for a model whose vendor published a tool. [panel-care-trigger.sh](packaging/hooks/panel-care-trigger.sh) is an empty skeleton with the warning in the header. It sends nothing until you replace the marked section.
+
+Screen-on time is stored in `~/.local/state/stillwatch/panel.json`. `stillwatch status` prints the current counters.
+
+## Privacy
+
+Frames are downscaled to a luma grid and dropped. Pixels and luma values are never written to disk, logs, history, or D-Bus.
+
+`stillwatch probe` and the calibration heatmap only carry per-block states (`changed`, `persistent`, `dark`, `ignored`) and percentages.
+
+History and logs hold numbers and state names. No pixels, no window titles, no track metadata. Media in a history row is a playing flag, not a player name.
+
+## Known limitations
+
+- Mouse sensor jitter or desk vibration can keep the compositor from ever reporting input idle, so Stillwatch never starts the stale check.
+- Reading, or a static dashboard, with no input, gets prompted. The countdown and snooze are the workaround. Per-app exemptions aren't in this version.
+- A windowed video with no MPRIS player looks the same as a video call and can prompt. Players that don't export MPRIS, and browser players the integration extension doesn't see, hit this.
+
+## Contributing
+
+Toolchains come from [asdf](https://asdf-vm.com/) ([`.tool-versions`](.tool-versions)). The quality gates also need `cargo-nextest`, `cargo-llvm-cov`, `cargo-deny`, `cargo-machete`, and `jscpd` (`npm install -g jscpd`).
 
 ```sh
 cargo xtask install-hooks   # pre-commit runs the fast gates (fmt, clippy, size)
-cargo xtask ci              # every gate, in the same order as CI
-cargo xtask ci --fast       # fmt, clippy, size only
+cargo xtask ci               # every gate, in the same order as CI
+cargo xtask ci --fast        # fmt, clippy, size only
+cargo xtask ci --strict      # a missing tool fails the run
 ```
 
-Individual gates: `cargo xtask gate <fmt|clippy|size|jscpd|deny|machete|coverage|packaging|bench>`. A gate whose tool isn't installed is skipped with a message, `--strict` turns that into a failure. `packaging` runs `systemd-analyze verify --user` on `packaging/stillwatch.service` and `desktop-file-validate` on the desktop files.
+`install-hooks` points `core.hooksPath` at [`.githooks/`](.githooks). Those are git hooks, not the display hooks in `packaging/hooks/`.
+
+One PR per Linear issue, against `main`. The branch name is the issue's `gitBranchName`. The PR body ends with `Closes JUS-N`. Squash merge, and only when CI is green. More of the layout is in [AGENTS.md](AGENTS.md).
+
+Individual gates: `cargo xtask gate <fmt|clippy|size|jscpd|deny|machete|coverage|packaging|bench>`. A gate whose tool isn't installed is skipped with a message. `--strict` turns that into a failure. `packaging` runs `systemd-analyze verify --user` on `packaging/stillwatch.service` and `desktop-file-validate` on the desktop files. It also runs `shellcheck` on `packaging/hooks/*.sh` and `namcap` on the PKGBUILD when those two are installed. A missing `shellcheck` or `namcap` is a skip, including under `--strict`.
 
 - `cargo xtask check-size [--max 400]` fails on any `.rs` file over 400 lines, not counting `#[cfg(test)]` items. Put big tests in a sibling `tests.rs` via `#[cfg(test)] mod tests;`.
 - `cargo xtask coverage` runs the tests under `cargo llvm-cov nextest` and requires 80% line coverage for the workspace and 90% for `stillwatch-core`. Binary `main.rs` files and `xtask` are excluded. The lcov report lands in `target/coverage/lcov.info`.
 - `jscpd` uses `.jscpd.json` (50 token minimum, tests excluded, any clone fails). `cargo deny` uses `deny.toml`.
+- `cargo xtask gen-docs` regenerates `docs/config.md` from the settings schema. `--check` only verifies.
 
 ### Integration tests
 
@@ -184,9 +294,9 @@ STILLWATCH_REQUIRE_KWIN=1 cargo nextest run --test wayland_idle
 
 ### CI
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on every PR, in an `archlinux:latest` container with the Rust version from `.tool-versions`. Both jobs call the same `cargo xtask` subcommands as above.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pushes to `main` and on every PR, in an `archlinux:latest` container with the Rust version from `.tool-versions`. Both jobs call the same `cargo xtask` subcommands as above. The container installs `shellcheck` and `namcap`, so the packaging gate checks the hooks and the PKGBUILD there.
 
-- **lint**: fmt, clippy, check-size, jscpd, cargo deny, cargo machete, the packaging file check (`systemd-analyze`, `desktop-file-validate`), and building the benches. Every gate runs even if an earlier one failed, so one push shows all of them.
+- **lint**: fmt, clippy, check-size, `docs/config.md` up to date, jscpd, cargo deny, cargo machete, the packaging checks (`systemd-analyze`, `desktop-file-validate`, `shellcheck`, `namcap`), and building the benches. Every gate runs even if an earlier one failed, so one push shows all of them.
 - **test**: `cargo xtask coverage`, unit and integration tests together, with `STILLWATCH_REQUIRE_DBUS=1` and `STILLWATCH_REQUIRE_KWIN=1`. The lcov report is uploaded as the `lcov` artifact.
 
 ## License
