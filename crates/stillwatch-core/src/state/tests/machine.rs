@@ -144,10 +144,10 @@ fn stray_events_are_ignored() {
         Event::Timer(TimerId::SnoozeExpiry),
         Event::DisplayPower {
             output: "HDMI-A-1".into(),
-            on: true,
+            on: false,
         },
         Event::OutputsChanged(vec![]),
-        Event::Session(SessionEvent::PrepareForSleep),
+        Event::Session(SessionEvent::ResumedFromSleep),
         Event::Control(ControlCommand::Reload),
     ];
     for state in [State::Active, State::Blanked, State::Locked, State::Paused] {

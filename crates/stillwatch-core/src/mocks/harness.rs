@@ -139,6 +139,22 @@ impl Harness {
         self.complete_capture()
     }
 
+    /// Completes a capture whose ceiling verdict is stale or fresh. The
+    /// normal verdict is whatever the detector has queued.
+    pub fn capture_ceiling(&mut self, stale: bool) -> Vec<Command> {
+        self.detector
+            .set_ceiling(Some(ScriptedDetector::ceiling_verdict(stale)));
+        self.complete_capture()
+    }
+
+    /// `HDMI-A-1` reports power on: DPMS on, or its overlay went away.
+    pub fn display_on(&mut self) -> Vec<Command> {
+        self.send(Event::DisplayPower {
+            output: "HDMI-A-1".into(),
+            on: true,
+        })
+    }
+
     /// Completes a capture with one `HDMI-A-1` frame, leaving the verdict to
     /// whatever the detector has queued.
     pub fn complete_capture(&mut self) -> Vec<Command> {

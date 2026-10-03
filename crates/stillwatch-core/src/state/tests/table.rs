@@ -88,7 +88,34 @@ const SCENARIOS: &[(State, Step)] = &[
         h.idle();
         h.send(ControlCommand::Resume);
     }),
+    (State::Snoozed, |h| {
+        h.capture_ceiling(true);
+    }),
+    (State::Paused, |h| {
+        let mut config = Config::default();
+        config.safety.ceiling_during_pause = true;
+        h.apply_config(&config);
+        h.idle();
+        h.capture_ceiling(true);
+    }),
+    (State::Locked, |h| {
+        h.fire(TimerId::LockedBlank);
+    }),
+    (State::Blanked, |h| {
+        h.display_on();
+        h.fire(TimerId::ReblankGrace);
+    }),
+    (State::Blanked, sleep),
+    (State::Snoozed, sleep),
+    (State::Blanked, |h| {
+        lock(h);
+        h.input();
+    }),
 ];
+
+fn sleep(h: &mut Harness) {
+    h.send(SessionEvent::PrepareForSleep);
+}
 
 #[test]
 fn every_row_is_exercised_and_nothing_else_happens() {

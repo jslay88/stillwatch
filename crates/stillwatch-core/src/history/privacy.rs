@@ -28,6 +28,7 @@ const ALLOWED: &[&str] = &[
     "reason",
     "blank_method",
     "snooze_seconds",
+    "reblank_attempt",
     "answer",
     "error_count",
     "from_version",
@@ -54,6 +55,7 @@ fn every_kind() -> Vec<HistoryKind> {
         HistoryKind::Reblank,
         HistoryKind::Ceiling,
         HistoryKind::ConfigReload,
+        HistoryKind::OverlayUsed,
         HistoryKind::PromptAnswered,
         HistoryKind::ConfigReloadFailed,
         HistoryKind::Migration,
@@ -67,6 +69,7 @@ fn every_kind() -> Vec<HistoryKind> {
             | HistoryKind::Reblank
             | HistoryKind::Ceiling
             | HistoryKind::ConfigReload
+            | HistoryKind::OverlayUsed
             | HistoryKind::PromptAnswered
             | HistoryKind::ConfigReloadFailed
             | HistoryKind::Migration => {}
@@ -95,6 +98,7 @@ fn full_entry(kind: HistoryKind) -> HistoryEntry {
     })
     .with_blank_method(BlankMethod::Overlay)
     .with_snooze(Duration::from_mins(15))
+    .with_reblank_attempt(2)
     .with_answer(PromptAnswer::Snooze)
     .with_error_count(3)
     .with_versions(1, 2)

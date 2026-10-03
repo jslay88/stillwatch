@@ -31,6 +31,8 @@ pub enum HistoryKind {
     Ceiling,
     /// The config was reloaded.
     ConfigReload,
+    /// The re-blank watchdog fell back to the black overlay.
+    OverlayUsed,
     /// The prompt ended; `answer` says how.
     PromptAnswered,
     /// A config reload failed and the last good config stayed in effect.
@@ -103,6 +105,9 @@ pub struct HistoryEntry {
     /// Snooze length in seconds, for `Snooze` entries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snooze_seconds: Option<u64>,
+    /// Re-blank attempt within the current blank episode, starting at 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reblank_attempt: Option<u32>,
     /// How the prompt ended, for `PromptAnswered` entries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer: Option<PromptAnswer>,
@@ -133,6 +138,7 @@ impl HistoryEntry {
             detection: None,
             blank_method: None,
             snooze_seconds: None,
+            reblank_attempt: None,
             answer: None,
             error_count: None,
             from_version: None,
@@ -169,6 +175,13 @@ impl HistoryEntry {
     #[must_use]
     pub fn with_snooze(mut self, snooze: Duration) -> Self {
         self.snooze_seconds = Some(snooze.as_secs());
+        self
+    }
+
+    /// Attaches the re-blank attempt number.
+    #[must_use]
+    pub fn with_reblank_attempt(mut self, attempt: u32) -> Self {
+        self.reblank_attempt = Some(attempt);
         self
     }
 

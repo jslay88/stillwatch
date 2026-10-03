@@ -281,8 +281,14 @@ fn cancel_snooze_goes_to_monitoring_while_idle() {
     h.to_prompting();
     h.answer(PromptOutcome::Snooze(15 * MINUTE));
     let commands = h.send(ControlCommand::CancelSnooze);
-    assert_eq!(commands[0], Command::CancelTimer(TimerId::SnoozeExpiry));
-    assert_eq!(commands[1], changed(State::Snoozed, State::Monitoring));
+    assert_eq!(
+        commands[..3],
+        [
+            Command::CancelTimer(TimerId::SnoozeExpiry),
+            Command::CancelTimer(TimerId::Capture),
+            changed(State::Snoozed, State::Monitoring)
+        ]
+    );
     assert_eq!(h.detector().resets(), 2);
     assert_eq!(h.status().snooze_remaining, None);
 }

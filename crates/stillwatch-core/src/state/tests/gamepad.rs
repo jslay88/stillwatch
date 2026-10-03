@@ -5,10 +5,11 @@ use std::time::Duration;
 use super::changed;
 use super::transitions::reach;
 use crate::command::Command;
-use crate::config::Config;
-use crate::event::ControlCommand;
+use crate::config::{Config, WhenLocked};
+use crate::event::{ControlCommand, SessionEvent};
 use crate::mocks::Harness;
 use crate::state::State;
+use crate::time::TimerId;
 
 fn config(edit: impl FnOnce(&mut Config)) -> Config {
     let mut config = Config::default();
@@ -72,9 +73,11 @@ fn gamepad_in_acting_counts_as_input() {
 
 #[test]
 fn gamepad_in_snoozed_follows_snooze_cancelled_by_input() {
+    // The snooze holds; the user is back, so the ceiling stops capturing.
     let mut h = reach(State::Snoozed);
-    assert_eq!(h.gamepad(), vec![]);
+    assert_eq!(h.gamepad(), vec![Command::CancelTimer(TimerId::Capture)]);
     assert_eq!(h.state(), State::Snoozed);
+    assert_eq!(h.gamepad(), vec![]);
 
     let mut h = Harness::with_config(&config(|c| c.prompt.snooze_cancelled_by_input = true));
     h.send(ControlCommand::Snooze(Duration::from_mins(15)));
@@ -83,8 +86,29 @@ fn gamepad_in_snoozed_follows_snooze_cancelled_by_input() {
 }
 
 #[test]
-fn gamepad_in_active_paused_and_locked_changes_nothing() {
-    for state in [State::Active, State::Paused, State::Locked] {
+fn gamepad_in_locked_restarts_the_blank_delay() {
+    let mut h = reach(State::Locked);
+    h.advance(Duration::from_secs(50));
+    assert_eq!(
+        h.gamepad(),
+        vec![Command::SetTimer {
+            id: TimerId::LockedBlank,
+            after: Duration::from_mins(1),
+        }]
+    );
+    h.advance(Duration::from_secs(59));
+    assert_eq!(h.state(), State::Locked);
+    h.advance(Duration::from_secs(1));
+    assert_eq!(h.state(), State::Acting);
+
+    let mut h = Harness::with_config(&config(|c| c.session.when_locked = WhenLocked::Pause));
+    h.send(SessionEvent::Locked);
+    assert_eq!(h.gamepad(), vec![]);
+}
+
+#[test]
+fn gamepad_in_active_and_paused_changes_nothing() {
+    for state in [State::Active, State::Paused] {
         let mut h = reach(state);
         assert_eq!(h.gamepad(), vec![], "{state}");
         assert_eq!(h.state(), state);

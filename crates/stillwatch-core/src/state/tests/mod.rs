@@ -1,14 +1,34 @@
 mod blank_path;
 mod gamepad;
 mod history;
+mod locked;
 mod machine;
+mod reblank;
 mod snooze;
+mod snoozed;
+mod suspend;
 mod table;
 mod transitions;
 
 use super::*;
 use crate::command::Command;
-use crate::history::HistoryEntry;
+use crate::config::Config;
+use crate::history::{HistoryEntry, HistoryKind};
+
+/// The default config with `edit` applied.
+fn config(edit: impl FnOnce(&mut Config)) -> Config {
+    let mut config = Config::default();
+    edit(&mut config);
+    config
+}
+
+/// The `Record` entries of `kind` among `commands`.
+fn records_of(commands: &[Command], kind: HistoryKind) -> Vec<HistoryEntry> {
+    records(commands)
+        .into_iter()
+        .filter(|entry| entry.kind == kind)
+        .collect()
+}
 
 /// The `Record` entries among `commands`.
 fn records(commands: &[Command]) -> Vec<HistoryEntry> {
@@ -22,7 +42,7 @@ fn records(commands: &[Command]) -> Vec<HistoryEntry> {
 }
 
 /// The kinds of the `Record` entries among `commands`, in order.
-fn record_kinds(commands: &[Command]) -> Vec<crate::history::HistoryKind> {
+fn record_kinds(commands: &[Command]) -> Vec<HistoryKind> {
     records(commands).iter().map(|entry| entry.kind).collect()
 }
 
@@ -39,7 +59,7 @@ fn effects(commands: &[Command]) -> Vec<Command> {
 fn transition_record(commands: &[Command]) -> HistoryEntry {
     let mut entries: Vec<_> = records(commands)
         .into_iter()
-        .filter(|entry| entry.kind == crate::history::HistoryKind::Transition)
+        .filter(|entry| entry.kind == HistoryKind::Transition)
         .collect();
     assert_eq!(entries.len(), 1, "expected one transition in {commands:?}");
     entries.remove(0)
