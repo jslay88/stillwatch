@@ -1,0 +1,6 @@
+# Synthetic v0 document: `stale.stale_percent` used to be `stale.threshold_percent`.
+version = 0
+
+[stale]
+threshold_percent = 80
+persist_checks = 4

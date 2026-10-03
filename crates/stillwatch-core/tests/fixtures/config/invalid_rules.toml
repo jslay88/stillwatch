@@ -1,0 +1,12 @@
+# Parses fine but breaks several validation rules at once.
+[stale]
+stale_percent = 0
+luma_delta_threshold = 300
+
+[prompt]
+snooze_presets_minutes = []
+allow_custom = false
+
+[action]
+mode = "command"
+command = "   "

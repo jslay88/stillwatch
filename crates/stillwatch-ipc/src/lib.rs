@@ -4,9 +4,10 @@
 //! [`OBJECT_PATH`] under the well-known name [`BUS_NAME`]; the CLI and GUI use
 //! the proxy in [`proxy`]. Structured payloads travel as JSON strings of the
 //! types in [`status`], [`probe`], and [`gamepad`], built with [`json`].
-//! Process-level helpers shared by all three binaries (logging setup and
-//! standard paths) live here too.
+//! Process-level helpers shared by all three binaries (logging setup, standard
+//! paths, and reading the config file) live here too.
 
+pub mod config_file;
 pub mod error;
 pub mod gamepad;
 pub mod json;
