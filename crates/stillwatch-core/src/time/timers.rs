@@ -28,6 +28,9 @@ pub enum TimerId {
     /// [`ActivityAggregator`](crate::activity::ActivityAggregator), not the
     /// state machine.
     GamepadIdle,
+    /// Input arrived during a prompt and `answer_grace_seconds` passed
+    /// without an answer.
+    PromptAnswerGrace,
 }
 
 /// A queue of pending timers keyed by [`TimerId`].

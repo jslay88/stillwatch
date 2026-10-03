@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::limits::{Bounds, POSITIVE};
+use crate::config::limits::{ANSWER_GRACE_SECONDS, Bounds, POSITIVE};
 use crate::config::validate::Issues;
 
 /// How the prompt is shown.
@@ -43,6 +43,8 @@ pub struct PromptConfig {
     pub fallback_to_dialog: bool,
     /// Seconds before the action runs if nobody answers.
     pub countdown_seconds: u32,
+    /// Seconds the prompt stays up after input, waiting for an answer.
+    pub answer_grace_seconds: u32,
     /// Snooze durations offered as buttons, in minutes.
     pub snooze_presets_minutes: Vec<u32>,
     /// Whether a custom snooze duration can be entered.
@@ -62,6 +64,7 @@ impl Default for PromptConfig {
             urgency: PromptUrgency::default(),
             fallback_to_dialog: true,
             countdown_seconds: 60,
+            answer_grace_seconds: 10,
             snooze_presets_minutes: vec![15, 60, 180],
             allow_custom: true,
             custom_min_minutes: 1,
@@ -74,6 +77,11 @@ impl Default for PromptConfig {
 impl PromptConfig {
     pub(crate) fn validate(&self, issues: &mut Issues) {
         issues.range("prompt.countdown_seconds", self.countdown_seconds, POSITIVE);
+        issues.range(
+            "prompt.answer_grace_seconds",
+            self.answer_grace_seconds,
+            ANSWER_GRACE_SECONDS,
+        );
         issues.range(
             "prompt.custom_min_minutes",
             self.custom_min_minutes,

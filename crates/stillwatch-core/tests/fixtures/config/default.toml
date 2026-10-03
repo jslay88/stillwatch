@@ -41,6 +41,7 @@ style = "auto"                    # auto | notification | dialog
 urgency = "critical"              # low | normal | critical
 fallback_to_dialog = true
 countdown_seconds = 60
+answer_grace_seconds = 10         # 1-120; the prompt stays up this long after input
 snooze_presets_minutes = [15, 60, 180]
 allow_custom = true
 custom_min_minutes = 1

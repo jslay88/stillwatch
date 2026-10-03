@@ -70,6 +70,10 @@ pub const LUMA: Bounds = Bounds::new(0, 255);
 /// Width of the downscaled luma grid. Narrower grids lose too much detail.
 pub const DOWNSCALE_WIDTH: Bounds = Bounds::at_least(16);
 
+/// Seconds a prompt stays up after input. Long enough to reach the prompt and
+/// click, short enough that an unanswered prompt doesn't linger.
+pub const ANSWER_GRACE_SECONDS: Bounds = Bounds::new(1, 120);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -290,11 +290,19 @@ The prompt shown before acting, with its countdown and snooze choices.
 
 ### `prompt.countdown_seconds`
 
-**Countdown.** Seconds the prompt waits for an answer before the action runs. Any input cancels it.
+**Countdown.** Seconds the prompt waits for an answer before the action runs. After any input the action won't run: the prompt waits up to `answer_grace_seconds` for an answer, never past the countdown, then closes.
 
 - Type: duration in seconds
 - Default: `60`
 - Allowed: at least 1
+
+### `prompt.answer_grace_seconds`
+
+**Time to answer after input.** Seconds the prompt stays up after the first input, so the mouse move or key press that reaches it doesn't close it before you click. Picking Custom... restarts it. Unanswered, the prompt closes and nothing happens.
+
+- Type: duration in seconds
+- Default: `10`
+- Allowed: 1 to 120
 
 ### `prompt.snooze_presets_minutes`
 

@@ -50,6 +50,19 @@ const SCENARIOS: &[(State, Step)] = &[
     (State::Prompting, |h| {
         h.fire(TimerId::PromptCountdown);
     }),
+    (State::Prompting, |h| {
+        h.input();
+        h.fire(TimerId::PromptAnswerGrace);
+    }),
+    (State::Prompting, |h| {
+        h.advance(Duration::from_secs(55));
+        h.input();
+        h.fire(TimerId::PromptCountdown);
+    }),
+    (State::Prompting, |h| {
+        h.input();
+        h.answer(PromptOutcome::Dismissed);
+    }),
     (State::Acting, |h| {
         h.send(Event::ActionCompleted);
     }),
