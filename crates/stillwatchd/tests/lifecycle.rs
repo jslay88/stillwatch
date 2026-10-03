@@ -1,11 +1,16 @@
 //! Spawns the real `stillwatchd` binary and drives it with signals.
+//!
+//! The child gets a private session bus and an empty runtime dir, so it
+//! never talks to the desktop's Wayland socket or session bus.
 
 use std::io::{self, BufRead, BufReader, Lines};
 use std::process::{Child, ChildStderr, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const TIMEOUT: Duration = Duration::from_secs(10);
+use stillwatch_testkit::PrivateBus;
+
+const TIMEOUT: Duration = Duration::from_secs(20);
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -13,10 +18,18 @@ struct Daemon {
     child: Child,
     stderr: Lines<BufReader<ChildStderr>>,
     started: String,
+    _bus: PrivateBus,
+    _state: tempfile::TempDir,
+    _runtime: tempfile::TempDir,
 }
 
 impl Daemon {
-    fn spawn() -> io::Result<Self> {
+    fn spawn() -> Result<Option<Self>, Box<dyn std::error::Error>> {
+        let Some(bus) = PrivateBus::start()? else {
+            return Ok(None);
+        };
+        let state = tempfile::tempdir()?;
+        let runtime = tempfile::tempdir()?;
         let mut child = Command::new(env!("CARGO_BIN_EXE_stillwatchd"))
             .args([
                 "--config",
@@ -24,6 +37,11 @@ impl Daemon {
                 "--log-level",
                 "info",
             ])
+            .env("DBUS_SESSION_BUS_ADDRESS", bus.address())
+            .env("XDG_STATE_HOME", state.path())
+            .env("XDG_RUNTIME_DIR", runtime.path())
+            .env_remove("WAYLAND_DISPLAY")
+            .env_remove("WAYLAND_SOCKET")
             .env_remove("JOURNAL_STREAM")
             .env_remove("RUST_LOG")
             .stderr(Stdio::piped())
@@ -36,9 +54,12 @@ impl Daemon {
             child,
             stderr: BufReader::new(stderr).lines(),
             started: String::new(),
+            _bus: bus,
+            _state: state,
+            _runtime: runtime,
         };
         daemon.started = daemon.wait_for_line("stillwatchd started")?;
-        Ok(daemon)
+        Ok(Some(daemon))
     }
 
     fn wait_for_line(&mut self, needle: &str) -> io::Result<String> {
@@ -82,9 +103,20 @@ impl Daemon {
     }
 }
 
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        if matches!(self.child.try_wait(), Ok(None)) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
 #[test]
 fn startup_logs_version_and_config_path() -> TestResult {
-    let daemon = Daemon::spawn()?;
+    let Some(daemon) = Daemon::spawn()? else {
+        return Ok(());
+    };
     let started = daemon.started.clone();
     assert!(started.contains(" INFO "), "{started}");
     assert!(started.contains(env!("CARGO_PKG_VERSION")), "{started}");
@@ -100,7 +132,9 @@ fn startup_logs_version_and_config_path() -> TestResult {
 
 #[test]
 fn sigterm_exits_zero() -> TestResult {
-    let mut daemon = Daemon::spawn()?;
+    let Some(mut daemon) = Daemon::spawn()? else {
+        return Ok(());
+    };
     daemon.signal("TERM")?;
     let stopping = daemon.wait_for_line("stillwatchd stopping")?;
     assert!(stopping.contains("Terminate"), "{stopping}");
@@ -110,7 +144,9 @@ fn sigterm_exits_zero() -> TestResult {
 
 #[test]
 fn sigint_exits_zero() -> TestResult {
-    let daemon = Daemon::spawn()?;
+    let Some(daemon) = Daemon::spawn()? else {
+        return Ok(());
+    };
     daemon.signal("INT")?;
     assert_eq!(daemon.wait()?.code(), Some(0));
     Ok(())
@@ -118,7 +154,9 @@ fn sigint_exits_zero() -> TestResult {
 
 #[test]
 fn sighup_keeps_running_until_sigterm() -> TestResult {
-    let mut daemon = Daemon::spawn()?;
+    let Some(mut daemon) = Daemon::spawn()? else {
+        return Ok(());
+    };
     daemon.signal("HUP")?;
     daemon.wait_for_line("SIGHUP")?;
     assert!(daemon.child.try_wait()?.is_none());

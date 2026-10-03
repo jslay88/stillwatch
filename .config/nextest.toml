@@ -2,5 +2,5 @@
 # log shows KWin actually started rather than the test skipping. Add new KWin
 # test binaries here.
 [[profile.default.overrides]]
-filter = 'binary(kwin) | binary(wayland_idle) | binary(dpms_kwin) | binary(kwin_screenshot)'
+filter = 'binary(kwin) | binary(wayland_idle) | binary(dpms_kwin) | binary(kwin_screenshot) | binary(daemon_kwin)'
 success-output = "final"
