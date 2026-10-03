@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use jiff::Timestamp;
@@ -21,6 +21,7 @@ pub(super) struct Transition {
     pub(super) detection: Option<DetectionStats>,
     pub(super) snooze: Option<Duration>,
     pub(super) blank_method: Option<BlankMethod>,
+    pub(super) reblank_attempt: Option<u32>,
 }
 
 impl Transition {
@@ -30,6 +31,7 @@ impl Transition {
             detection: None,
             snooze: None,
             blank_method: None,
+            reblank_attempt: None,
         }
     }
 
@@ -48,11 +50,17 @@ impl Transition {
         self
     }
 
+    pub(super) const fn with_reblank_attempt(mut self, attempt: u32) -> Self {
+        self.reblank_attempt = Some(attempt);
+        self
+    }
+
     pub(super) fn history_entry(&self, at: Timestamp, from: State) -> HistoryEntry {
         let mut entry = HistoryEntry::transition(at, from, self.to);
         entry.detection.clone_from(&self.detection);
         entry.snooze_seconds = self.snooze.map(|snooze| snooze.as_secs());
         entry.blank_method = self.blank_method;
+        entry.reblank_attempt = self.reblank_attempt;
         entry
     }
 }
@@ -61,7 +69,7 @@ impl Transition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ActionStep {
     Lock,
-    Blank,
+    Blank(BlankMethod),
 }
 
 /// Everything the handlers share: config, detector, observed facts, and the
@@ -82,6 +90,14 @@ pub(super) struct Ctx {
     pub(super) action_steps: VecDeque<ActionStep>,
     /// Outputs Stillwatch blanked and hasn't woken yet.
     pub(super) blanked: Option<Vec<String>>,
+    /// The method of the last blank sent.
+    pub(super) blank_method: BlankMethod,
+    /// Re-blanks since the last input or fresh blank.
+    pub(super) reblank_attempts: u32,
+    /// Between `PrepareForSleep` and `ResumedFromSleep`.
+    pub(super) asleep: bool,
+    /// Timers armed and not yet fired or cancelled.
+    armed: HashSet<TimerId>,
 }
 
 impl Ctx {
@@ -100,6 +116,10 @@ impl Ctx {
             snooze_until: None,
             action_steps: VecDeque::new(),
             blanked: None,
+            blank_method: config.action.blank_method,
+            reblank_attempts: 0,
+            asleep: false,
+            armed: HashSet::new(),
         }
     }
 
@@ -117,11 +137,29 @@ impl Ctx {
     }
 
     pub(super) fn set_timer(&mut self, id: TimerId, after: Duration) {
+        self.armed.insert(id);
         self.emit(Command::SetTimer { id, after });
     }
 
     pub(super) fn cancel_timer(&mut self, id: TimerId) {
+        self.armed.remove(&id);
         self.emit(Command::CancelTimer(id));
+    }
+
+    /// Cancels `id` only if it is still armed.
+    pub(super) fn disarm(&mut self, id: TimerId) {
+        if self.armed.contains(&id) {
+            self.cancel_timer(id);
+        }
+    }
+
+    pub(super) fn is_armed(&self, id: TimerId) -> bool {
+        self.armed.contains(&id)
+    }
+
+    /// Notes that `id` fired, so it is no longer armed.
+    pub(super) fn fired(&mut self, id: TimerId) {
+        self.armed.remove(&id);
     }
 
     /// A history entry of `kind` stamped with the current time and context.
@@ -148,8 +186,9 @@ impl Ctx {
     }
 
     /// Where to go once a snooze or pause no longer holds the machine.
+    /// A locked session goes through Active, which hands over to Locked.
     pub(super) const fn watch_or_active(&self) -> State {
-        if self.idle {
+        if self.idle && !self.locked {
             State::Monitoring
         } else {
             State::Active

@@ -1,5 +1,10 @@
 //! Acting: the configured `action.mode` runs one step at a time, each step
 //! confirmed by `Event::ActionCompleted`.
+//!
+//! A re-blank (from Blanked) only blanks, with the method the watchdog
+//! picked. With the session already locked, `lock_and_blank` skips the lock.
+
+use std::collections::VecDeque;
 
 use super::super::context::ActionStep;
 use super::{Ctx, State, StateHandler, Transition, is_input};
@@ -11,18 +16,26 @@ use crate::history::HistoryKind;
 pub(super) struct Handler;
 
 impl StateHandler for Handler {
-    fn enter(&self, ctx: &mut Ctx, _via: &Transition) -> Option<Transition> {
-        let steps: &[ActionStep] = match ctx.config.action.mode {
-            // The dim phase needs the overlay backend; until then it blanks directly.
-            ActionMode::Blank | ActionMode::DimThenBlank => &[ActionStep::Blank],
-            ActionMode::LockAndBlank => &[ActionStep::Lock, ActionStep::Blank],
-            ActionMode::Command => {
-                // Hooks are fire and forget, so there is nothing to wait for.
-                ctx.hook(HookKind::ActionCommand);
-                return Some(Transition::to(State::Blanked));
+    fn enter(&self, ctx: &mut Ctx, via: &Transition) -> Option<Transition> {
+        let configured = ctx.config.action.blank_method;
+        let blank = ActionStep::Blank(via.blank_method.unwrap_or(configured));
+        let steps = if via.reblank_attempt.is_some() {
+            VecDeque::from([blank])
+        } else {
+            ctx.reblank_attempts = 0;
+            match ctx.config.action.mode {
+                // The dim phase needs the overlay backend; until then it blanks directly.
+                ActionMode::Blank | ActionMode::DimThenBlank => VecDeque::from([blank]),
+                ActionMode::LockAndBlank if ctx.locked => VecDeque::from([blank]),
+                ActionMode::LockAndBlank => VecDeque::from([ActionStep::Lock, blank]),
+                ActionMode::Command => {
+                    // Hooks are fire and forget, so there is nothing to wait for.
+                    ctx.hook(HookKind::ActionCommand);
+                    return Some(Transition::to(State::Blanked));
+                }
             }
         };
-        ctx.action_steps = steps.iter().copied().collect();
+        ctx.action_steps = steps;
         start_next(ctx);
         None
     }
@@ -37,8 +50,7 @@ impl StateHandler for Handler {
                 if start_next(ctx) {
                     None
                 } else {
-                    let method = ctx.config.action.blank_method;
-                    Some(Transition::to(State::Blanked).with_blank_method(method))
+                    Some(Transition::to(State::Blanked).with_blank_method(ctx.blank_method))
                 }
             }
             Event::ActionFailed { .. } => Some(Transition::to(ctx.watch_or_active())),
@@ -55,13 +67,16 @@ fn start_next(ctx: &mut Ctx) -> bool {
     };
     match step {
         ActionStep::Lock => ctx.emit(Command::Lock),
-        ActionStep::Blank => {
+        ActionStep::Blank(method) => {
             let outputs = ctx.action_outputs();
-            let method = ctx.config.action.blank_method;
             ctx.blanked = Some(outputs.clone());
+            ctx.blank_method = method;
             ctx.emit(Command::Blank { outputs, method });
-            let entry = ctx.history(HistoryKind::Blank).with_blank_method(method);
-            ctx.emit(Command::Record(entry));
+            // Re-blanks are recorded as `Reblank` by the Blanked handler.
+            if ctx.reblank_attempts == 0 {
+                let entry = ctx.history(HistoryKind::Blank).with_blank_method(method);
+                ctx.emit(Command::Record(entry));
+            }
         }
     }
     true

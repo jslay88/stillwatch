@@ -19,7 +19,8 @@ pub struct Observation {
 ///
 /// Clones share state, so a test keeps one clone to script and inspect while
 /// the machine owns another. With nothing queued, `observe` reports a fresh
-/// (not stale) screen.
+/// (not stale) screen. `ceiling` returns whatever
+/// [`set_ceiling`](Self::set_ceiling) last set, `None` until then.
 #[derive(Debug, Clone, Default)]
 pub struct ScriptedDetector {
     inner: Arc<Mutex<Inner>>,
@@ -30,6 +31,8 @@ struct Inner {
     verdicts: VecDeque<DetectionStats>,
     observations: Vec<Observation>,
     resets: usize,
+    ceiling: Option<DetectionStats>,
+    ceiling_queries: usize,
 }
 
 impl ScriptedDetector {
@@ -49,10 +52,25 @@ impl ScriptedDetector {
         self.push(Self::verdict(stale));
     }
 
+    /// Sets what every later `ceiling` call returns.
+    pub fn set_ceiling(&self, stats: Option<DetectionStats>) {
+        lock(&self.inner).ceiling = stats;
+    }
+
     /// A one-output verdict on `HDMI-A-1`: every block persistent when
     /// `stale`, none otherwise, against the default 70% threshold.
     #[must_use]
     pub fn verdict(stale: bool) -> DetectionStats {
+        Self::stats(stale, Threshold::new(70, ThresholdReason::Normal))
+    }
+
+    /// Like [`verdict`](Self::verdict), against the default 98% ceiling.
+    #[must_use]
+    pub fn ceiling_verdict(stale: bool) -> DetectionStats {
+        Self::stats(stale, Threshold::new(98, ThresholdReason::Ceiling))
+    }
+
+    fn stats(stale: bool, threshold: Threshold) -> DetectionStats {
         let counts = BlockCounts {
             total: 256,
             counted: 256,
@@ -60,7 +78,6 @@ impl ScriptedDetector {
             dark: 0,
             ignored: 0,
         };
-        let threshold = Threshold::new(70, ThresholdReason::Normal);
         DetectionStats {
             outputs: vec![OutputStats::from_counts(
                 "HDMI-A-1",
@@ -83,6 +100,12 @@ impl ScriptedDetector {
     pub fn resets(&self) -> usize {
         lock(&self.inner).resets
     }
+
+    /// How many times `ceiling` was called.
+    #[must_use]
+    pub fn ceiling_queries(&self) -> usize {
+        lock(&self.inner).ceiling_queries
+    }
 }
 
 impl StaleDetector for ScriptedDetector {
@@ -100,6 +123,12 @@ impl StaleDetector for ScriptedDetector {
 
     fn reset(&mut self) {
         lock(&self.inner).resets += 1;
+    }
+
+    fn ceiling(&self) -> Option<DetectionStats> {
+        let mut inner = lock(&self.inner);
+        inner.ceiling_queries += 1;
+        inner.ceiling.clone()
     }
 }
 
@@ -134,5 +163,19 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn ceiling_is_sticky_and_counted() {
+        let handle = ScriptedDetector::new();
+        let detector = handle.clone();
+        assert_eq!(detector.ceiling(), None);
+        handle.set_ceiling(Some(ScriptedDetector::ceiling_verdict(true)));
+        for _ in 0..2 {
+            let stats = detector.ceiling().unwrap();
+            assert!(stats.stale);
+            assert_eq!(stats.threshold.reason, ThresholdReason::Ceiling);
+        }
+        assert_eq!(handle.ceiling_queries(), 3);
     }
 }

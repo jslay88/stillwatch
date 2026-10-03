@@ -8,6 +8,7 @@
 mod acting;
 mod active;
 mod blanked;
+mod ceiling;
 pub(super) mod common;
 mod locked;
 mod monitoring;
@@ -23,9 +24,7 @@ use crate::event::{ActivityEvent, Event};
 pub(super) trait StateHandler: Sync {
     /// Runs on entry. May return a follow-up transition, for example an
     /// action that finishes as soon as it starts.
-    fn enter(&self, _ctx: &mut Ctx, _via: &Transition) -> Option<Transition> {
-        None
-    }
+    fn enter(&self, ctx: &mut Ctx, via: &Transition) -> Option<Transition>;
 
     /// Runs on exit, before the next state's `enter`.
     fn exit(&self, _ctx: &mut Ctx) {}
@@ -35,6 +34,19 @@ pub(super) trait StateHandler: Sync {
 
     /// Runs after a config reload while in this state.
     fn reconfigure(&self, _ctx: &mut Ctx) {}
+
+    /// Runs when the system is about to sleep. Every timer must be gone once
+    /// the returned transition (if any) is taken. By default the machine
+    /// waits out the sleep in Active.
+    fn suspend(&self, _ctx: &mut Ctx) -> Option<Transition> {
+        Some(Transition::to(State::Active))
+    }
+
+    /// Runs after resuming from sleep, once idle tracking and the detector
+    /// have been reset.
+    fn resume(&self, _ctx: &mut Ctx) -> Option<Transition> {
+        None
+    }
 }
 
 /// The handler for `state`.

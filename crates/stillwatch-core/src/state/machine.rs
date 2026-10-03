@@ -56,7 +56,7 @@ impl StateMachine {
     pub fn handle(&mut self, now: Instant, wall: Timestamp, event: &Event) -> Vec<Command> {
         self.ctx.begin(now, wall);
         if common::observe(&mut self.ctx, event) {
-            let next = common::global(self.state, event)
+            let next = common::global(self.state, &mut self.ctx, event)
                 .or_else(|| handler(self.state).on_event(&mut self.ctx, event));
             if let Some(next) = next {
                 self.go(next);
@@ -68,7 +68,9 @@ impl StateMachine {
     /// Switches to a newly loaded config and records the reload.
     ///
     /// Timers already armed keep their deadlines, except the capture timer,
-    /// which is re-armed with the new interval while capturing. The detector
+    /// which is re-armed with the new interval while capturing (or started
+    /// or stopped when the ceiling settings change), and the locked blank
+    /// delay, which starts or stops with `session.when_locked`. The detector
     /// keeps its counters; when detection settings change, build a new one
     /// and pass it to [`replace_detector`](Self::replace_detector).
     pub fn apply_config(&mut self, now: Instant, wall: Timestamp, config: &Config) -> Vec<Command> {

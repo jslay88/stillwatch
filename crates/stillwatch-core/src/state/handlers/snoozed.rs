@@ -1,11 +1,12 @@
 //! Snoozed: prompting waits until the snooze ends.
 //!
-//! Expiry follows the same rule as cancelling. The snooze ceiling isn't
-//! handled yet.
+//! Expiry follows the same rule as cancelling: Monitoring with fresh
+//! counters while idle, otherwise Active. The [`ceiling`](super::ceiling)
+//! still applies.
 
 use std::time::Duration;
 
-use super::{Ctx, State, StateHandler, Transition, is_input};
+use super::{Ctx, State, StateHandler, Transition, ceiling, is_input};
 use crate::command::Command;
 use crate::event::{ControlCommand, Event};
 use crate::history::HistoryKind;
@@ -18,12 +19,14 @@ impl StateHandler for Handler {
         if let Some(duration) = via.snooze {
             start(ctx, duration);
         }
+        ceiling::enter(ctx, true);
         None
     }
 
     fn exit(&self, ctx: &mut Ctx) {
         ctx.cancel_timer(TimerId::SnoozeExpiry);
         ctx.snooze_until = None;
+        ceiling::stop(ctx);
     }
 
     fn on_event(&self, ctx: &mut Ctx, event: &Event) -> Option<Transition> {
@@ -42,8 +45,12 @@ impl StateHandler for Handler {
             event if is_input(event) && ctx.config.prompt.snooze_cancelled_by_input => {
                 Some(Transition::to(State::Active))
             }
-            _ => None,
+            event => ceiling::on_event(ctx, event, true),
         }
+    }
+
+    fn reconfigure(&self, ctx: &mut Ctx) {
+        ceiling::refresh(ctx, true);
     }
 }
 
