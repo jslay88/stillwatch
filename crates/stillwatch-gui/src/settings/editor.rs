@@ -11,7 +11,7 @@ use stillwatch_ipc::config_file;
 
 use super::assemble;
 use super::presets::PresetDraft;
-use super::values::{FieldError, FieldValue};
+use super::values::{FieldError, FieldValue, RegionInput};
 
 mod edit;
 mod preset;
@@ -110,6 +110,24 @@ impl Editor {
     #[must_use]
     pub fn field(&self, key: &str) -> Option<&FieldValue> {
         self.values.get(key)
+    }
+
+    /// A whole-number field, when it parses.
+    #[must_use]
+    pub fn number(&self, key: &str) -> Option<u32> {
+        match self.values.get(key)? {
+            FieldValue::Text(text) => text.trim().parse().ok(),
+            _ => None,
+        }
+    }
+
+    /// Ignore regions on the form, including ones not saved yet.
+    #[must_use]
+    pub fn ignore_regions(&self) -> &[RegionInput] {
+        match self.values.get("stale.ignore_regions") {
+            Some(FieldValue::Regions(regions)) => regions,
+            _ => &[],
+        }
     }
 
     /// Text in the add row of a list.

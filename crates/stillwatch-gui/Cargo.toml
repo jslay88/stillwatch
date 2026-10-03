@@ -25,6 +25,7 @@ tracing.workspace = true
 zbus.workspace = true
 
 [dev-dependencies]
+jiff.workspace = true
 stillwatch-testkit.workspace = true
 stillwatchd = { workspace = true, features = ["fake"] }
 tempfile.workspace = true

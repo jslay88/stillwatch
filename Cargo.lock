@@ -3422,6 +3422,7 @@ dependencies = [
  "clap",
  "futures-util",
  "iced",
+ "jiff",
  "ksni",
  "stillwatch-core",
  "stillwatch-ipc",

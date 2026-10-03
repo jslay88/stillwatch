@@ -158,6 +158,26 @@ pub enum FieldChange {
         /// Index to remove.
         index: usize,
     },
+    /// Replace one region, or append when `index` is `None`.
+    ///
+    /// The calibration page sends this after a drag so `x`, `y`, `w`, and `h`
+    /// land together.
+    RegionSet {
+        /// Schema key.
+        key: String,
+        /// Region to replace. `None` appends.
+        index: Option<usize>,
+        /// Output connector name.
+        output: String,
+        /// Left edge, as text.
+        x: String,
+        /// Top edge, as text.
+        y: String,
+        /// Width, as text.
+        w: String,
+        /// Height, as text.
+        h: String,
+    },
 }
 
 impl FieldChange {
@@ -175,7 +195,8 @@ impl FieldChange {
             | Self::Grid { key, .. }
             | Self::Region { key, .. }
             | Self::RegionPush { key }
-            | Self::RegionRemove { key, .. } => key,
+            | Self::RegionRemove { key, .. }
+            | Self::RegionSet { key, .. } => key,
         }
     }
 }

@@ -26,6 +26,8 @@ mod ignore;
 mod threshold;
 mod tracker;
 
+pub use ignore::{BlockRect, PixelSpan, blocks_to_pixels, pixels_to_blocks};
+
 use std::collections::{BTreeMap, HashMap};
 
 use tracing::warn;
@@ -151,6 +153,17 @@ impl BlockDetector {
     #[must_use]
     pub const fn grid(&self) -> [u32; 2] {
         self.stale.block_grid
+    }
+
+    /// Pixel size of a connected output, for mapping ignore regions.
+    ///
+    /// `None` until [`set_outputs`](Self::set_outputs) has reported `name`.
+    #[must_use]
+    pub fn output_size(&self, name: &str) -> Option<(u32, u32)> {
+        self.outputs
+            .iter()
+            .find(|output| output.name == name)
+            .map(|output| (output.width, output.height))
     }
 
     /// Feeds one capture tick of frames: each monitored frame's grid is

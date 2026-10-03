@@ -4,6 +4,7 @@
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Fill};
 
+use crate::calibration;
 use crate::page::Page;
 use crate::settings;
 use crate::shell::{Message, Shell};
@@ -20,6 +21,7 @@ pub fn shell(shell: &Shell) -> Element<'_, Message> {
             settings::page(&shell.editor, &shell.config_errors, &shell.devices)
                 .map(Message::Settings),
         ),
+        Page::Calibration => content.push(calibration::page(shell)),
         page => content
             .push(text(page.label()).size(24))
             .push(text(page.placeholder())),

@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use crate::args::Cli;
 use crate::launch::LaunchMode;
 use crate::session::{self, Outcome};
-use crate::shell::{DaemonCall, DaemonEvent, Link, Message, Pane, Shell, TrayAction, Visibility};
+use crate::shell::{DaemonCall, DaemonEvent, Link, Message, Pane, Shell, TrayAction};
 use crate::tray::{self, TrayModel};
 use crate::tray_service::{self, GuiTray};
 use crate::view;
@@ -269,12 +269,12 @@ fn update(app: &mut App, message: AppMessage) -> Task<AppMessage> {
         }
         AppMessage::CloseRequested(id) => {
             if let Some(pane) = app.slots.pane_of(&id) {
-                hide(&mut app.shell, pane);
+                calls = hide(&mut app.shell, pane);
             }
         }
         AppMessage::Closed(id) => {
             if let Some(pane) = app.slots.take_id(&id) {
-                hide(&mut app.shell, pane);
+                calls = hide(&mut app.shell, pane);
             }
         }
         AppMessage::TrayReady(handle) => {
@@ -301,11 +301,12 @@ fn update(app: &mut App, message: AppMessage) -> Task<AppMessage> {
     Task::batch(tasks)
 }
 
-fn hide(shell: &mut Shell, pane: Pane) {
-    match pane {
-        Pane::Settings => shell.settings = Visibility::Closed,
-        Pane::Prompt => shell.prompt = Visibility::Closed,
-    }
+fn hide(shell: &mut Shell, pane: Pane) -> Vec<DaemonCall> {
+    let message = match pane {
+        Pane::Settings => Message::CloseSettings,
+        Pane::Prompt => Message::ClosePrompt,
+    };
+    crate::model::update(shell, message)
 }
 
 fn shutdown(app: &mut App) -> Task<AppMessage> {

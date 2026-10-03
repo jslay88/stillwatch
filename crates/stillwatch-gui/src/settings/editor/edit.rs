@@ -93,6 +93,23 @@ impl Editor {
                     regions.remove(index);
                 }
             }
+            FieldChange::RegionSet {
+                index,
+                output,
+                x,
+                y,
+                w,
+                h,
+                ..
+            } => {
+                if let FieldValue::Regions(regions) = field {
+                    let region = RegionInput { output, x, y, w, h };
+                    match index {
+                        Some(index) if index < regions.len() => regions[index] = region,
+                        Some(_) | None => regions.push(region),
+                    }
+                }
+            }
             FieldChange::ListDraft { .. } | FieldChange::ListPush { .. } => {}
         }
     }

@@ -35,6 +35,8 @@ pub async fn dispatch(proxy: &StillwatchProxy<'_>, call: DaemonCall) -> Result<(
         DaemonCall::Pause => proxy.pause().await,
         DaemonCall::Resume => proxy.resume().await,
         DaemonCall::Reload => proxy.reload().await.map(|_| ()),
+        DaemonCall::StartProbe { interval_ms } => proxy.start_probe(interval_ms).await,
+        DaemonCall::StopProbe => proxy.stop_probe().await,
         // `watch` answers this before `dispatch`. The arm keeps the match closed.
         DaemonCall::RefreshDevices => Ok(()),
     };
@@ -121,6 +123,7 @@ enum Wake {
 enum Incoming {
     State(String),
     Config { ok: bool, errors: Vec<String> },
+    Probe(String),
     Bad(String),
 }
 
@@ -175,18 +178,33 @@ async fn incoming(
 ) -> Result<Pin<Box<dyn Stream<Item = Incoming> + Send>>, Error> {
     let states = proxy.receive_state_changed().await?;
     let configs = proxy.receive_config_changed().await?;
-    let states = Box::pin(states).map(|signal| match signal.args() {
+    let probes = proxy.receive_probe_sample().await?;
+    let states = boxed(states.map(|signal| match signal.args() {
         Ok(args) => Incoming::State(args.state().to_string()),
         Err(err) => Incoming::Bad(err.to_string()),
-    });
-    let configs = Box::pin(configs).map(|signal| match signal.args() {
+    }));
+    let configs = boxed(configs.map(|signal| match signal.args() {
         Ok(args) => Incoming::Config {
             ok: *args.ok(),
             errors: args.errors().clone(),
         },
         Err(err) => Incoming::Bad(err.to_string()),
-    });
-    Ok(Box::pin(futures_util::stream::select(states, configs)))
+    }));
+    let probes = boxed(probes.map(|signal| match signal.args() {
+        Ok(args) => Incoming::Probe((*args.json()).to_owned()),
+        Err(err) => Incoming::Bad(err.to_string()),
+    }));
+    let mut merged = futures_util::stream::SelectAll::new();
+    merged.push(states);
+    merged.push(configs);
+    merged.push(probes);
+    Ok(Box::pin(merged))
+}
+
+fn boxed(
+    stream: impl Stream<Item = Incoming> + Send + 'static,
+) -> Pin<Box<dyn Stream<Item = Incoming> + Send>> {
+    Box::pin(stream)
 }
 
 async fn publish_status(
@@ -197,6 +215,9 @@ async fn publish_status(
     let status: StatusPayload = from_json(&json)?;
     let _ = events
         .send(DaemonEvent::Snapshot(Snapshot::from_status(&status)))
+        .await;
+    let _ = events
+        .send(DaemonEvent::Capture(status.capture_backend))
         .await;
     Ok(())
 }
@@ -241,6 +262,7 @@ async fn on_signal(
     match incoming {
         Incoming::Bad(err) => tracing::warn!(%err, "daemon signal"),
         Incoming::State(name) => on_state(proxy, &name, events).await,
+        Incoming::Probe(json) => on_probe(&json, events).await,
         Incoming::Config { ok, errors } => {
             let _ = events.send(DaemonEvent::Config { ok, errors }).await;
             if ok {
@@ -248,6 +270,17 @@ async fn on_signal(
             }
         }
     }
+}
+
+async fn on_probe(json: &str, events: &mpsc::Sender<DaemonEvent>) {
+    // Don't log `json`: a bad sample must not put luma or pixels in the log.
+    let Ok(sample) = from_json::<stillwatch_ipc::probe::ProbeSample>(json) else {
+        tracing::warn!("ignoring a probe sample that isn't block states");
+        return;
+    };
+    let _ = events
+        .send(DaemonEvent::Probe(crate::calibration::view_of(&sample)))
+        .await;
 }
 
 async fn on_state(

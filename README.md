@@ -164,7 +164,7 @@ The summary line is the stale fraction the daemon will use: `persistent 72% (dar
 
 `--json` never includes luma values or pixels. Only per-block states (`changed`, `persistent`, `dark`, `ignored`) and the percentages above.
 
-The GUI Calibration page is that grid as a heatmap. The page is still a placeholder, so probe is the calibration tool that runs today. `ignore_regions` in the settings schema is drawn on the same heatmap once the page exists.
+The Calibration page in `stillwatch-gui` draws that same grid. Opening it starts a probe (1 second, 5 seconds, or `check_interval_seconds`) and leaving the page or closing the window stops it. Sliders for `stale_percent`, `persist_checks`, `luma_delta_threshold`, and `ignore_dark_below` edit the settings form; Save writes the file the same way the settings page does. Drag a rectangle to add an `ignore_regions` entry in that output's pixels (it snaps to the blocks you drag). Edit redraws one, Delete removes it. If the daemon has no capture backend, the page says so.
 
 ## CLI
 
@@ -190,7 +190,7 @@ stillwatch-gui prompt            # tray, and the prompt placeholder
 
 Everything except `idle-test`, `config`, and `probe --standalone` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
 
-`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. Settings is the schema-driven form. Calibration, History, Service, and `prompt` are still placeholders.
+`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. Settings is the schema-driven form. Calibration is the heatmap. History, Service, and `prompt` are still placeholders.
 
 - **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
 - **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.
