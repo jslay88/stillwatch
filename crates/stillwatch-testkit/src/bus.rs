@@ -52,13 +52,20 @@ impl PrivateBus {
     /// Fails if `dbus-daemon` is missing while required, can't be spawned,
     /// or exits without printing an address.
     pub fn start() -> Result<Option<Self>, Error> {
-        let required = std::env::var(REQUIRE_ENV).is_ok_and(|value| value == "1");
-        Self::start_program(DAEMON, required)
+        Self::start_program(DAEMON, required())
     }
 
     fn start_program(program: &str, required: bool) -> Result<Option<Self>, Error> {
+        Self::spawn(Command::new(program), required)
+    }
+
+    /// Starts the bus from `command` (a `dbus-daemon` the caller has given an
+    /// environment).
+    pub(crate) fn spawn(mut command: Command, required: bool) -> Result<Option<Self>, Error> {
+        let program = command.get_program().to_string_lossy().into_owned();
+        let program = program.as_str();
         let config = ConfigFile::write()?;
-        let spawned = Command::new(program)
+        let spawned = command
             .arg(format!("--config-file={}", config.0.display()))
             .args(["--nofork", "--print-address"])
             .stdin(Stdio::null())
@@ -113,6 +120,15 @@ impl PrivateBus {
     pub fn stop(&mut self) {
         stop(&mut self.child);
     }
+
+    pub(crate) fn pid(&self) -> u32 {
+        self.child.id()
+    }
+}
+
+/// Whether [`REQUIRE_ENV`] is `1`.
+pub(crate) fn required() -> bool {
+    std::env::var(REQUIRE_ENV).is_ok_and(|value| value == "1")
 }
 
 impl Drop for PrivateBus {
