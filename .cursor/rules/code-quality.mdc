@@ -1,0 +1,43 @@
+---
+description: Rust code quality rules (file size, no duplication, no panics, no unsafe, docs)
+alwaysApply: true
+---
+
+# Code quality
+
+## File size
+
+- Every `.rs` file is at most **400 lines**, not counting `#[cfg(test)]` modules. `cargo xtask check-size` enforces it.
+- When tests get big, move them to a sibling `tests.rs`:
+
+```rust
+// src/detector.rs
+#[cfg(test)]
+mod tests; // lives in src/detector/tests.rs
+```
+
+- Near the limit, split by responsibility into submodules. Don't compress code to fit.
+
+## No duplication
+
+- Before writing a helper, search `crates/stillwatch-core` and `crates/stillwatch-ipc` for an existing one.
+- Share through traits or a common module. Never copy code between crates or backends. `jscpd` fails CI on clones outside tests.
+
+## No panics, no unsafe
+
+- No `unwrap`, `expect`, `panic!`, `todo!`, `unimplemented!`, or `dbg!` outside tests. Return errors (`thiserror` in libraries, `anyhow` in binaries).
+
+```rust
+// BAD
+let cfg = toml::from_str::<Config>(&text).unwrap();
+// GOOD
+let cfg: Config = toml::from_str(&text).map_err(ConfigError::Parse)?;
+```
+
+- No `unsafe`. `unsafe_code` is forbidden workspace-wide.
+- Never silence a lint with `#[allow]` to get around these rules.
+
+## Docs and comments
+
+- Every public item gets a `///` doc comment.
+- Write comments only for constraints the code can't express (protocol quirks, ordering requirements, why a value is what it is). No comments narrating what the next line does.
