@@ -2,6 +2,8 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
+use crate::command::Command;
+
 /// Identifies a timer requested by the state machine.
 ///
 /// At most one timer per id is pending: scheduling an id again replaces it.
@@ -76,10 +78,32 @@ impl TimerQueue {
         self.pending.len() != before
     }
 
+    /// Applies a `SetTimer` or `CancelTimer` command issued at `now`.
+    /// Returns whether `command` was one of those two.
+    pub fn apply(&mut self, now: Instant, command: &Command) -> bool {
+        match command {
+            Command::SetTimer { id, after } => self.schedule_after(*id, now, *after),
+            Command::CancelTimer(id) => {
+                self.cancel(*id);
+            }
+            _ => return false,
+        }
+        true
+    }
+
     /// Whether `id` is pending.
     #[must_use]
     pub fn contains(&self, id: TimerId) -> bool {
         self.pending.iter().any(|timer| timer.id == id)
+    }
+
+    /// When `id` fires, if pending.
+    #[must_use]
+    pub fn deadline(&self, id: TimerId) -> Option<Instant> {
+        self.pending
+            .iter()
+            .find(|timer| timer.id == id)
+            .map(|timer| timer.deadline)
     }
 
     /// The earliest pending deadline.
@@ -175,6 +199,22 @@ mod tests {
         assert!(timers.cancel(TimerId::Capture));
         assert!(!timers.cancel(TimerId::Capture));
         assert!(!timers.contains(TimerId::Capture));
+    }
+
+    #[test]
+    fn applies_timer_commands_and_ignores_others() {
+        let now = FakeClock::new().now();
+        let mut timers = TimerQueue::new();
+        let set = Command::SetTimer {
+            id: TimerId::Capture,
+            after: secs(60),
+        };
+        assert!(timers.apply(now, &set));
+        assert_eq!(timers.deadline(TimerId::Capture), Some(now + secs(60)));
+        assert_eq!(timers.deadline(TimerId::SnoozeExpiry), None);
+        assert!(!timers.apply(now, &Command::DismissPrompt));
+        assert!(timers.apply(now, &Command::CancelTimer(TimerId::Capture)));
+        assert!(timers.is_empty());
     }
 
     #[test]

@@ -16,7 +16,9 @@
 
 mod blanker;
 mod capture;
+mod detector;
 mod gamepad;
+mod harness;
 mod history;
 mod idle;
 mod media;
@@ -27,7 +29,9 @@ mod sink;
 
 pub use blanker::{BlankerCall, MockBlanker};
 pub use capture::MockCapture;
+pub use detector::{Observation, ScriptedDetector};
 pub use gamepad::MockGamepadSource;
+pub use harness::Harness;
 pub use history::MemoryHistory;
 pub use idle::MockIdleSource;
 pub use media::MockMediaWatcher;
