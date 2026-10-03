@@ -1,11 +1,15 @@
 //! Shell state: which windows are open, which page is showing, and what the
 //! daemon last told us. No I/O.
 
+use std::path::PathBuf;
+
 use stillwatch_core::state::State;
 use stillwatch_ipc::status::StatusPayload;
 
+use crate::edit_msg::SettingsMsg;
 use crate::launch::LaunchMode;
 use crate::page::Page;
+use crate::settings::Editor;
 
 /// Whether a window is closed, open, or open and needing focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -71,6 +75,8 @@ pub struct Snapshot {
     pub state: State,
     /// Seconds left on a snooze, when the daemon reported one.
     pub snooze_remaining_seconds: Option<u64>,
+    /// Reload problems from `Status()`, each `key: message` when the key is known.
+    pub config_errors: Vec<String>,
 }
 
 impl Snapshot {
@@ -80,6 +86,7 @@ impl Snapshot {
         Self {
             state: status.state,
             snooze_remaining_seconds: status.snooze_remaining_seconds,
+            config_errors: status.config_errors.clone(),
         }
     }
 }
@@ -120,6 +127,8 @@ pub enum DaemonCall {
     Pause,
     /// `Resume`.
     Resume,
+    /// `Reload()`. Skipped by the shell when the daemon is down.
+    Reload,
 }
 
 /// A tray menu (or left-click) choice.
@@ -169,6 +178,8 @@ pub enum Message {
     },
     /// News from the daemon watcher.
     Daemon(DaemonEvent),
+    /// An edit, save, or restore on the settings page.
+    Settings(SettingsMsg),
 }
 
 /// The settings window, the prompt placeholder, and the daemon link.
@@ -192,6 +203,10 @@ pub struct Shell {
     pub notice: Option<String>,
     /// Tray quit, or the window's Quit button.
     pub quit: bool,
+    /// Config file the settings page reads and writes.
+    pub config_path: Option<PathBuf>,
+    /// Settings form. Defaults until a file is loaded.
+    pub editor: Editor,
 }
 
 impl Shell {
@@ -208,6 +223,8 @@ impl Shell {
             config_errors: Vec::new(),
             notice: None,
             quit: false,
+            config_path: None,
+            editor: Editor::pristine(),
         }
     }
 

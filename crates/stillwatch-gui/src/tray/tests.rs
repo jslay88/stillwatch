@@ -15,6 +15,7 @@ fn every_state_has_an_icon_distinct_from_daemon_down() {
             link: Link::Up(Snapshot {
                 state,
                 snooze_remaining_seconds: None,
+                config_errors: Vec::new(),
             }),
             ..Shell::new(vec![15])
         };
@@ -29,6 +30,7 @@ fn tooltip_names_the_state_and_snooze_time_left() {
         status_text(&Link::Up(Snapshot {
             state: State::Active,
             snooze_remaining_seconds: None,
+            config_errors: Vec::new(),
         })),
         "active"
     );
@@ -36,6 +38,7 @@ fn tooltip_names_the_state_and_snooze_time_left() {
         status_text(&Link::Up(Snapshot {
             state: State::Snoozed,
             snooze_remaining_seconds: Some(90),
+            config_errors: Vec::new(),
         })),
         "snoozed, 1m 30s left"
     );
@@ -43,6 +46,7 @@ fn tooltip_names_the_state_and_snooze_time_left() {
         link: Link::Up(Snapshot {
             state: State::Paused,
             snooze_remaining_seconds: None,
+            config_errors: Vec::new(),
         }),
         ..Shell::new(Vec::new())
     };
@@ -74,6 +78,7 @@ fn menu_lists_each_preset_and_swaps_pause_for_resume() {
         link: Link::Up(Snapshot {
             state: State::Paused,
             snooze_remaining_seconds: None,
+            config_errors: Vec::new(),
         }),
         ..Shell::new(vec![15])
     };

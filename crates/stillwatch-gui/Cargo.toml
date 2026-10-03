@@ -18,6 +18,8 @@ ksni.workspace = true
 stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
 thiserror.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 zbus.workspace = true
@@ -25,6 +27,7 @@ zbus.workspace = true
 [dev-dependencies]
 stillwatch-testkit.workspace = true
 stillwatchd = { workspace = true, features = ["fake"] }
+tempfile.workspace = true
 
 [lints]
 workspace = true

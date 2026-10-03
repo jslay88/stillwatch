@@ -2,13 +2,16 @@
 //!
 //! The window is an iced daemon: it stays up with no window until the tray
 //! or a second invocation asks for one, and it keeps running after the last
-//! window closes. Page bodies are placeholders. The tray speaks D-Bus to
-//! `stillwatchd` and does not need the daemon in order to open.
+//! window closes. The settings page is generated from the schema. Calibration,
+//! history, service, and the prompt dialog are still placeholders. The tray
+//! speaks D-Bus to `stillwatchd` and does not need the daemon in order to open.
 
 mod app;
 mod args;
+mod boot;
 mod bus;
 mod daemon;
+mod edit_msg;
 mod error;
 mod icons;
 mod instance;
@@ -17,6 +20,7 @@ mod model;
 mod page;
 mod presets;
 mod session;
+mod settings;
 mod shell;
 mod tray;
 mod tray_service;
@@ -25,6 +29,7 @@ mod windows;
 
 pub use args::Cli;
 pub use daemon::{dispatch, watch};
+pub use edit_msg::{FieldChange, RegionPart, RestoreScope, SettingsMsg};
 pub use instance::{Claim, GUI_BUS_NAME, claim};
 pub use launch::LaunchMode;
 pub use model::update;
