@@ -7,7 +7,8 @@ const STYLES: &[Choice] = &[
     Choice {
         value: "auto",
         label: "Automatic",
-        help: "A notification normally, the dialog when a notification wouldn't be seen.",
+        help: "A notification normally. The dialog during fullscreen only after \
+               notifications are verified not to show there.",
     },
     Choice {
         value: "notification",

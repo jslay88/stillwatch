@@ -1,7 +1,9 @@
 //! `stillwatch history`: one table row per decision.
 
 use stillwatch_core::command::BlankMethod;
-use stillwatch_core::history::{HistoryEntry, HistoryKind, PromptAnswer};
+use stillwatch_core::history::{
+    HistoryEntry, HistoryKind, PromptAnswer, PromptMedium, PromptReason,
+};
 use stillwatch_core::stats::DetectionStats;
 
 use super::{Style, duration, percent, threshold};
@@ -99,6 +101,12 @@ fn detection(detection: &DetectionStats) -> String {
 
 fn details(entry: &HistoryEntry) -> Vec<String> {
     let mut parts = Vec::new();
+    if let Some(style) = entry.prompt_style {
+        parts.push(medium_name(style).to_owned());
+    }
+    if let Some(reason) = entry.prompt_reason {
+        parts.push(reason_name(reason).to_owned());
+    }
     if let Some(answer) = entry.answer {
         parts.push(answer_name(answer).to_owned());
     }
@@ -119,6 +127,24 @@ fn details(entry: &HistoryEntry) -> Vec<String> {
         parts.push(format!("v{from} -> v{to}"));
     }
     parts
+}
+
+const fn medium_name(style: PromptMedium) -> &'static str {
+    match style {
+        PromptMedium::Notification => "notification",
+        PromptMedium::Dialog => "dialog",
+    }
+}
+
+const fn reason_name(reason: PromptReason) -> &'static str {
+    match reason {
+        PromptReason::Configured => "configured",
+        PromptReason::Auto => "auto",
+        PromptReason::Fullscreen => "fullscreen",
+        PromptReason::FallbackUnavailable => "no notification server",
+        PromptReason::FallbackFailed => "notification failed",
+        PromptReason::FallbackClosed => "closed without an action",
+    }
 }
 
 const fn answer_name(answer: PromptAnswer) -> &'static str {

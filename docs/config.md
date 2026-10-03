@@ -266,7 +266,7 @@ The prompt shown before acting, with its countdown and snooze choices.
 - Type: choice
 - Default: `"auto"`
 - Values:
-  - `auto`: A notification normally, the dialog when a notification wouldn't be seen.
+  - `auto`: A notification normally. The dialog during fullscreen only after notifications are verified not to show there.
   - `notification`: A desktop notification with snooze actions and a live countdown.
   - `dialog`: Stillwatch's own dialog window.
 
