@@ -3,8 +3,6 @@
 use std::future::{self, Future};
 use std::io::Write;
 
-use anyhow::Context as _;
-
 use super::{control, history, probe, reload, status};
 use crate::args::{HistoryArgs, ProbeArgs, SnoozeArgs, StatusArgs};
 use crate::connect::connect;
@@ -42,11 +40,7 @@ pub fn run(
     style: &Style,
     out: &mut dyn Write,
 ) -> anyhow::Result<()> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .context("can't start the async runtime")?;
-    runtime.block_on(execute(request, bus_address, style, out, interrupted()))
+    super::block_on(execute(request, bus_address, style, out, interrupted()))
 }
 
 /// Connects to the daemon on `bus_address` (the session bus when `None`)

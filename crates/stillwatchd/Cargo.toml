@@ -16,6 +16,7 @@ fake = []
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+humantime.workspace = true
 ddc.workspace = true
 ddc-i2c.workspace = true
 evdev.workspace = true

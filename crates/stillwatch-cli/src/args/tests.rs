@@ -120,7 +120,8 @@ fn probe() {
         Command::Probe(ProbeArgs {
             interval: None,
             count: None,
-            json: false
+            json: false,
+            standalone: false
         })
     );
     assert_eq!(
@@ -128,7 +129,17 @@ fn probe() {
         Command::Probe(ProbeArgs {
             interval: Some(Duration::from_secs(10)),
             count: NonZeroUsize::new(3),
-            json: true
+            json: true,
+            standalone: false
+        })
+    );
+    assert_eq!(
+        command(&["probe", "--standalone"]),
+        Command::Probe(ProbeArgs {
+            interval: None,
+            count: None,
+            json: false,
+            standalone: true
         })
     );
     let err = parse(&["probe", "--interval", "0s"]).unwrap_err();

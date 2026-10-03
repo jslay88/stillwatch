@@ -14,7 +14,7 @@ stillwatch pause
 stillwatch resume
 stillwatch reload
 stillwatch history [--since <DURATION>] [--json]
-stillwatch probe [--interval <DURATION>] [--count <N>] [--json]
+stillwatch probe [--interval <DURATION>] [--count <N>] [--json] [--standalone]
 stillwatch idle-test [--timeout <DURATION>] # alias --minutes, a bare number is minutes
 stillwatch config init [--force] [PATH]
 stillwatch config check [PATH]
@@ -22,14 +22,14 @@ stillwatch config check [PATH]
 
 `stillwatch <command> --help` has details. Durations use [humantime](https://docs.rs/humantime) syntax (`90s`, `45m`, `1h 30m`).
 
-Everything except `idle-test` and `config` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
+Everything except `idle-test`, `config`, and `probe --standalone` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
 
 - **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
 - **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.
 - **`cancel-snooze`**, **`pause`**, **`resume`**: what they say.
 - **`reload`**: makes the daemon reload its config file and prints the result. If the new config is invalid, the problems are printed one per line, the daemon keeps the last good config, and the exit code is 1.
 - **`history`**: a table of recent decisions (time, event, state change, per-output persistent percentages with the threshold and reason, snooze/blank/answer details, and media/gamepad/lock context), oldest first. `--since 2h` limits it to the last two hours. `--json` prints one `HistoryEntry` per line.
-- **`probe`**: live calibration. Shows each output's block grid (`██` persistent, `░░` changed, `··` dark, `xx` ignored) with a summary line like `HDMI-A-1: persistent 72% (dark 18%, counted 230/256), threshold 70% normal -> STALE`. The interval defaults to `stale.check_interval_seconds` from the config file; `--interval 5s` is handy while tuning (100ms minimum). Runs until Ctrl-C or `--count` samples. `--json` prints one `ProbeSample` per line. Only block states and percentages leave the daemon, never pixels.
+- **`probe`**: live calibration. Shows each output's block grid (`██` persistent, `░░` changed, `··` dark, `xx` ignored) with a summary line like `HDMI-A-1: persistent 72% (dark 18%, counted 230/256), threshold 70% normal -> STALE`. The interval defaults to `stale.check_interval_seconds` from the config file; `--interval 5s` is handy while tuning (100ms minimum). Runs until Ctrl-C or `--count` samples. `--json` prints one `ProbeSample` per line. `--standalone` starts `stillwatchd --probe` (the installed binary KWin has to authorize) and renders those lines; without it the running daemon is asked over D-Bus. Only block states and percentages leave the process, never pixels.
 
 Colors are used only when stdout is a terminal and `NO_COLOR` isn't set.
 
@@ -53,7 +53,7 @@ Watching keyboard, mouse, and gamepads with a 1m idle timeout. Ctrl-C to stop.
 2026-10-02 20:42:51  active (keyboard/mouse)
 ```
 
-The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`), `--log-level <LEVEL>`, and `--capture-check <OUTPUT>` (see below). The log level comes from `--log-level`, then `RUST_LOG`, then `info` (the config's `logging.level` will slot in before the default once the daemon loads its config). Under systemd it logs to the journal, otherwise to stderr.
+The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`), `--log-level <LEVEL>`, `--capture-check <OUTPUT>` (see below), and `--probe [--interval <DURATION>] [--count <N>]` (JSON lines for `stillwatch probe --standalone`). The log level comes from `--log-level`, then `RUST_LOG`, then `info` (the config's `logging.level` will slot in before the default once the daemon loads its config). Under systemd it logs to the journal, otherwise to stderr.
 
 ## Display hooks
 
@@ -89,6 +89,24 @@ Things that trip it up:
 - If the `stillwatchd` binary is replaced while it's running (an upgrade or a rebuild), KWin sees `/proc/<pid>/exe` as `... (deleted)` and refuses it. Restart the daemon.
 
 To check it, `stillwatchd --capture-check HDMI-A-1` captures that output once and prints only its size, format, and the luma grid it was downscaled to, or the error with what to fix. The daemon also checks once at startup and logs the result. Without authorization it keeps running on input idle alone.
+
+## Calibrating detection
+
+`stillwatch probe` is how you tune `stale_percent`, `persist_checks`, `luma_delta_threshold`, `ignore_dark_below`, and `ignore_regions`. It shows the block grid the detector is using, not a screenshot.
+
+```
+stillwatch probe --interval 5s
+stillwatch probe --standalone --interval 5s --count 8
+stillwatch probe --json
+```
+
+`--interval 5s` is faster than the default `stale.check_interval_seconds` (60s) while you watch the grid. A static desktop should flip `░░` (changed) to `██` (persistent) after `persist_checks` samples. A clock, a video tile, or anything else that moves should stay `░░`. Letterboxing goes `··` (dark; those blocks are excluded). A panel clock or a status widget you don't want to count is an `ignore_regions` rect, and shows as `xx`.
+
+The summary line is the stale fraction the daemon will use: `persistent 72% (dark 18%, counted 230/256), threshold 70% normal -> STALE`. `media` instead of `normal` means a non-ignored MPRIS player is Playing and `media_stale_percent` is in effect.
+
+`--standalone` is the path that actually captures when the daemon isn't running yet. It starts the installed `stillwatchd` (sibling of this `stillwatch`, same binary the `.desktop` `Exec=` has to name) with `--probe`. That process prints one `ProbeSample` JSON line per sample; this command renders them with the same grid as the D-Bus probe. `--json` prints those lines as-is. Capture has to run as `stillwatchd` or KWin refuses it.
+
+`--json` never includes luma values or pixels. Only per-block states (`changed`, `persistent`, `dark`, `ignored`) and the percentages above.
 
 ## Development
 
