@@ -6,20 +6,26 @@ use stillwatch_core::schema::{self, Section};
 
 use crate::edit_msg::{RestoreScope, SettingsMsg};
 
+use super::catalog::Catalog;
 use super::controls;
 use super::editor::{Banner, Editor};
+use super::preset_view;
 use super::values::{self, FieldError};
 
 /// The schema-driven settings form.
 #[must_use]
-pub fn page<'a>(editor: &'a Editor, external: &'a [String]) -> Element<'a, SettingsMsg> {
+pub fn page<'a>(
+    editor: &'a Editor,
+    external: &'a [String],
+    devices: &'a Catalog,
+) -> Element<'a, SettingsMsg> {
     let (keyed, other) = values::external_issues(external);
     let mut issues = editor.issues();
     issues.extend(keyed);
 
-    let mut form = column![].spacing(18);
+    let mut form = column![preset_view::block(editor, devices)].spacing(18);
     for section in schema::SECTIONS {
-        form = form.push(section_block(editor, section, &issues));
+        form = form.push(section_block(editor, section, &issues, devices));
     }
 
     let mut page = column![].spacing(12).height(Fill);
@@ -49,6 +55,7 @@ fn section_block<'a>(
     editor: &'a Editor,
     section: &'a Section,
     issues: &[FieldError],
+    devices: &'a Catalog,
 ) -> Element<'a, SettingsMsg> {
     let mut body = column![
         row![
@@ -70,6 +77,7 @@ fn section_block<'a>(
             field,
             editor.draft(setting.key),
             issues,
+            devices,
         ));
     }
     body.into()

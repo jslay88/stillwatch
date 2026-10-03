@@ -1,20 +1,23 @@
 //! iced daemon: window open/close on top of [`crate::model::update`].
 
 use std::sync::{Mutex, PoisonError};
+use std::time::Duration;
 
 use futures_util::SinkExt as _;
 use iced::window::{self, Id};
-use iced::{Element, Size, Subscription, Task, Theme};
+use iced::{Element, Subscription, Task, Theme};
 use tokio::sync::mpsc;
 
 use crate::args::Cli;
 use crate::launch::LaunchMode;
 use crate::session::{self, Outcome};
-use crate::shell::{DaemonCall, DaemonEvent, Message, Pane, Shell, TrayAction, Visibility};
+use crate::shell::{DaemonCall, DaemonEvent, Link, Message, Pane, Shell, TrayAction, Visibility};
 use crate::tray::{self, TrayModel};
 use crate::tray_service::{self, GuiTray};
 use crate::view;
 use crate::windows::{self, Slots, WindowOp};
+
+mod ui;
 
 /// Runtime state around the shell.
 pub struct App {
@@ -56,6 +59,8 @@ pub enum AppMessage {
     TrayReady(Option<ksni::Handle<GuiTray>>),
     /// A task finished and the shell didn't change.
     Nop,
+    /// Time to ask the daemon for outputs, gamepads, and players.
+    PollDevices,
 }
 
 /// Builds the iced daemon from `cli`. Logging is already set up.
@@ -121,11 +126,15 @@ fn view(app: &App, id: Id) -> Element<'_, AppMessage> {
 }
 
 fn subscription(app: &App) -> Subscription<AppMessage> {
-    Subscription::batch([
+    let mut subs = vec![
         window::close_events().map(AppMessage::Closed),
         window::close_requests().map(AppMessage::CloseRequested),
         shell_events(app),
-    ])
+    ];
+    if app.shell.settings.is_open() && matches!(app.shell.link, Link::Up(_)) {
+        subs.push(iced::time::every(Duration::from_secs(1)).map(|_| AppMessage::PollDevices));
+    }
+    Subscription::batch(subs)
 }
 
 fn shell_events(app: &App) -> Subscription<AppMessage> {
@@ -272,6 +281,11 @@ fn update(app: &mut App, message: AppMessage) -> Task<AppMessage> {
             app.tray = handle;
             app.shown = None;
         }
+        AppMessage::PollDevices => {
+            if app.shell.settings.is_open() && matches!(app.shell.link, Link::Up(_)) {
+                calls.push(DaemonCall::RefreshDevices);
+            }
+        }
     }
     if app.shell.quit {
         return shutdown(app);
@@ -281,7 +295,7 @@ fn update(app: &mut App, message: AppMessage) -> Task<AppMessage> {
         tasks.push(spawn_tray(app));
     }
     tasks.extend(send_calls(&app.calls, calls));
-    if let Some(task) = refresh_tray(app) {
+    if let Some(task) = ui::refresh_tray(app) {
         tasks.push(task);
     }
     Task::batch(tasks)
@@ -347,7 +361,7 @@ fn apply_windows(app: &mut App) -> Vec<Task<AppMessage>> {
     for op in ops {
         match op {
             WindowOp::Open(pane) => {
-                let (id, opened) = window::open(window_settings(pane));
+                let (id, opened) = window::open(ui::window_settings(pane));
                 app.slots.insert(pane, id);
                 tasks.push(opened.map(|_| AppMessage::Nop));
             }
@@ -365,30 +379,4 @@ fn apply_windows(app: &mut App) -> Vec<Task<AppMessage>> {
         }
     }
     tasks
-}
-
-fn window_settings(pane: Pane) -> window::Settings {
-    let size = match pane {
-        Pane::Settings => Size::new(840.0, 560.0),
-        Pane::Prompt => Size::new(420.0, 240.0),
-    };
-    window::Settings {
-        size,
-        ..window::Settings::default()
-    }
-}
-
-fn refresh_tray(app: &mut App) -> Option<Task<AppMessage>> {
-    let model = tray::tray_model(&app.shell);
-    if app.shown.as_ref() == Some(&model) {
-        return None;
-    }
-    let handle = app.tray.clone()?;
-    app.shown = Some(model.clone());
-    Some(Task::perform(
-        async move {
-            handle.update(|tray| tray.set_model(model)).await;
-        },
-        |()| AppMessage::Nop,
-    ))
 }

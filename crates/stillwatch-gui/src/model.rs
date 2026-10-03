@@ -3,7 +3,7 @@
 
 use stillwatch_core::state::State;
 
-use crate::settings;
+use crate::settings::{self, Catalog};
 use crate::shell::{
     DaemonCall, DaemonEvent, Link, Message, Shell, Snapshot, TrayAction, Visibility, snooze_seconds,
 };
@@ -17,17 +17,31 @@ use crate::shell::{
 pub fn update(shell: &mut Shell, message: Message) -> Vec<DaemonCall> {
     match message {
         Message::Navigate(page) => shell.page = page,
-        Message::OpenSettings => shell.settings = shell.settings.reveal(),
+        Message::OpenSettings => {
+            shell.settings = shell.settings.reveal();
+            return refresh_devices(shell);
+        }
         Message::CloseSettings => shell.settings = Visibility::Closed,
         Message::OpenPrompt => shell.prompt = shell.prompt.reveal(),
         Message::ClosePrompt => shell.prompt = Visibility::Closed,
         Message::Quit => shell.quit = true,
         Message::Settings(message) => return settings_msg(shell, message),
         Message::Tray(action) => return tray(shell, action),
-        Message::BecamePrimary { first, mode } => shell.apply_launch(mode, first),
-        Message::Daemon(event) => apply_daemon(shell, event),
+        Message::BecamePrimary { first, mode } => {
+            shell.apply_launch(mode, first);
+            return refresh_devices(shell);
+        }
+        Message::Daemon(event) => return apply_daemon(shell, event),
     }
     Vec::new()
+}
+
+fn refresh_devices(shell: &Shell) -> Vec<DaemonCall> {
+    if shell.settings.is_open() && matches!(shell.link, Link::Up(_)) {
+        vec![DaemonCall::RefreshDevices]
+    } else {
+        Vec::new()
+    }
 }
 
 fn tray(shell: &mut Shell, action: TrayAction) -> Vec<DaemonCall> {
@@ -40,7 +54,7 @@ fn tray(shell: &mut Shell, action: TrayAction) -> Vec<DaemonCall> {
         TrayAction::Resume => Some(DaemonCall::Resume),
         TrayAction::OpenSettings => {
             shell.settings = shell.settings.reveal();
-            None
+            return refresh_devices(shell);
         }
         TrayAction::Quit => {
             shell.quit = true;
@@ -50,19 +64,25 @@ fn tray(shell: &mut Shell, action: TrayAction) -> Vec<DaemonCall> {
     call.into_iter().collect()
 }
 
-fn apply_daemon(shell: &mut Shell, event: DaemonEvent) {
+fn apply_daemon(shell: &mut Shell, event: DaemonEvent) -> Vec<DaemonCall> {
     match event {
         DaemonEvent::Down => {
             shell.link = Link::Down;
             shell.notice = None;
+            shell.devices = Catalog::default();
+            Vec::new()
         }
         DaemonEvent::Snapshot(snapshot) => {
             shell.config_ok = Some(snapshot.config_errors.is_empty());
             shell.config_errors.clone_from(&snapshot.config_errors);
             shell.link = Link::Up(snapshot);
             shell.notice = None;
+            refresh_devices(shell)
         }
-        DaemonEvent::State(state) => apply_state(shell, state),
+        DaemonEvent::State(state) => {
+            apply_state(shell, state);
+            Vec::new()
+        }
         DaemonEvent::Config { ok, errors } => {
             shell.config_ok = Some(ok);
             shell.config_errors = errors;
@@ -73,9 +93,20 @@ fn apply_daemon(shell: &mut Shell, event: DaemonEvent) {
                     shell.presets_minutes = presets;
                 }
             }
+            Vec::new()
         }
-        DaemonEvent::Presets(presets) => shell.presets_minutes = presets,
-        DaemonEvent::CallFailed(message) => shell.notice = Some(message),
+        DaemonEvent::Presets(presets) => {
+            shell.presets_minutes = presets;
+            Vec::new()
+        }
+        DaemonEvent::CallFailed(message) => {
+            shell.notice = Some(message);
+            Vec::new()
+        }
+        DaemonEvent::Devices(catalog) => {
+            shell.devices = catalog;
+            Vec::new()
+        }
     }
 }
 

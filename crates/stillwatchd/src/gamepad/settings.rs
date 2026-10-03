@@ -48,11 +48,7 @@ impl IgnoreList {
     }
 
     pub(crate) fn matches(&self, name: &str) -> bool {
-        if self.needles.is_empty() {
-            return false;
-        }
-        let name = name.to_lowercase();
-        self.needles.iter().any(|needle| name.contains(needle))
+        stillwatch_core::config::ignores_device_name(&self.needles, name)
     }
 }
 

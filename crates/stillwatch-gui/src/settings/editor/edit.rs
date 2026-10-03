@@ -63,6 +63,11 @@ impl Editor {
                     items.remove(index);
                 }
             }
+            FieldChange::ListSet { items, .. } => {
+                if let FieldValue::List(slot) = field {
+                    *slot = items;
+                }
+            }
             FieldChange::Grid { cols, rows, .. } => *field = FieldValue::Grid { cols, rows },
             FieldChange::Region {
                 index,
@@ -159,14 +164,7 @@ pub fn handle(editor: &mut Editor, path: Option<&Path>, message: SettingsMsg) ->
             editor.apply_edit(change);
             Outcome::none()
         }
-        SettingsMsg::Save => match editor.save(path) {
-            Ok(Some(presets)) => Outcome::saved(presets),
-            Ok(None) => Outcome::none(),
-            Err(err) => {
-                editor.save_error = Some(err);
-                Outcome::none()
-            }
-        },
+        SettingsMsg::Save => finish_save(editor, path),
         SettingsMsg::ReloadDisk => {
             if let Some(path) = path {
                 editor.reload(path);
@@ -190,6 +188,43 @@ pub fn handle(editor: &mut Editor, path: Option<&Path>, message: SettingsMsg) ->
         }
         SettingsMsg::CancelRestore => {
             editor.cancel_restore();
+            Outcome::none()
+        }
+        SettingsMsg::PreviewPreset(kind) => {
+            editor.preview_preset(kind);
+            Outcome::none()
+        }
+        SettingsMsg::MixedToggle { name, on } => {
+            editor.toggle_mixed(&name, on);
+            Outcome::none()
+        }
+        SettingsMsg::MixedDraft(value) => {
+            editor.set_mixed_draft(value);
+            Outcome::none()
+        }
+        SettingsMsg::MixedPush => {
+            editor.push_mixed();
+            Outcome::none()
+        }
+        SettingsMsg::CancelPreset => {
+            editor.cancel_preset();
+            Outcome::none()
+        }
+        SettingsMsg::ApplyPreset => {
+            if !editor.apply_preset_keys() {
+                return Outcome::none();
+            }
+            finish_save(editor, path)
+        }
+    }
+}
+
+fn finish_save(editor: &mut Editor, path: Option<&Path>) -> Outcome {
+    match editor.save(path) {
+        Ok(Some(presets)) => Outcome::saved(presets),
+        Ok(None) => Outcome::none(),
+        Err(err) => {
+            editor.save_error = Some(err);
             Outcome::none()
         }
     }

@@ -10,9 +10,11 @@ use crate::edit_msg::RestoreScope;
 use stillwatch_ipc::config_file;
 
 use super::assemble;
+use super::presets::PresetDraft;
 use super::values::{FieldError, FieldValue};
 
 mod edit;
+mod preset;
 
 pub use edit::handle;
 
@@ -60,6 +62,7 @@ pub struct Editor {
     pending: Option<RestoreScope>,
     save_error: Option<String>,
     load_error: Option<String>,
+    preset: Option<PresetDraft>,
 }
 
 impl Editor {
@@ -99,6 +102,7 @@ impl Editor {
             pending: None,
             save_error: None,
             load_error: None,
+            preset: None,
         })
     }
 
@@ -161,6 +165,21 @@ impl Editor {
         assemble::issues(&self.effective())
     }
 
+    /// The display preset being reviewed, when one is open.
+    #[must_use]
+    pub fn preset(&self) -> Option<&PresetDraft> {
+        self.preset.as_ref()
+    }
+
+    /// Keys the open preset would change. Empty when nothing is open.
+    #[must_use]
+    pub fn preset_changes(&self) -> Vec<super::presets::KeyChange> {
+        self.preset
+            .as_ref()
+            .map(|draft| super::presets::changes(&self.values, draft))
+            .unwrap_or_default()
+    }
+
     /// Snooze presets when the form is valid.
     #[must_use]
     pub fn presets(&self) -> Option<Vec<u32>> {
@@ -216,6 +235,7 @@ impl Editor {
             pending: None,
             save_error: None,
             load_error: None,
+            preset: None,
         })
     }
 
@@ -230,6 +250,7 @@ impl Editor {
             pending: None,
             save_error: None,
             load_error: Some(message),
+            preset: None,
         }
     }
 

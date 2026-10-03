@@ -8,10 +8,11 @@ use stillwatch_core::schema::{self, Control, Setting};
 use stillwatch_core::state::State;
 use stillwatch_ipc::status::StatusPayload;
 
-use crate::edit_msg::{FieldChange, RestoreScope, SettingsMsg};
+use crate::edit_msg::{FieldChange, PresetKind, RestoreScope, SettingsMsg};
 use crate::model::update;
 use crate::shell::{DaemonCall, DaemonEvent, Link, Message, Shell, Snapshot};
 
+use super::catalog::Catalog;
 use super::controls;
 use super::document;
 use super::editor::{Banner, Editor};
@@ -53,17 +54,35 @@ fn every_schema_key_builds_a_control() {
         let field = editor
             .field(setting.key)
             .unwrap_or_else(|| panic!("no value for {}", setting.key));
-        let _ = controls::widget(setting, field, editor.draft(setting.key), &[]);
+        let _ = controls::widget(
+            setting,
+            field,
+            editor.draft(setting.key),
+            &[],
+            &Catalog::default(),
+        );
         seen.push(setting.key);
     }
     assert_eq!(seen.len(), schema::settings().count());
 
     let text = Setting::new("extra.note", "Note", Control::Text, "Free text.");
-    let _ = controls::widget(&text, &FieldValue::Text("hi".into()), "", &[]);
+    let _ = controls::widget(
+        &text,
+        &FieldValue::Text("hi".into()),
+        "",
+        &[],
+        &Catalog::default(),
+    );
     let tags = Setting::new("extra.tags", "Tags", Control::StringList, "A list.");
-    let _ = controls::widget(&tags, &FieldValue::List(vec!["a".into()]), "b", &[]);
+    let _ = controls::widget(
+        &tags,
+        &FieldValue::List(vec!["a".into()]),
+        "b",
+        &[],
+        &Catalog::default(),
+    );
 
-    let _ = view::page(&editor, &[]);
+    let _ = view::page(&editor, &[], &Catalog::default());
 }
 
 #[test]
@@ -203,7 +222,7 @@ fn restore_waits_for_confirmation_and_is_scoped() {
     assert!(editor.pending().is_some());
     assert_eq!(text_of(&editor, "idle.input_idle_minutes"), "20");
     assert!(editor.confirm_prompt().unwrap().contains("Idle"));
-    let _ = view::page(&editor, &[]);
+    let _ = view::page(&editor, &[], &Catalog::default());
 
     let _ = handle(&mut editor, None, SettingsMsg::CancelRestore);
     assert!(editor.pending().is_none());
@@ -276,7 +295,7 @@ fn config_changed_refreshes_when_clean_and_banners_when_dirty() {
     );
     assert_eq!(shell.editor.banner(), Some(Banner::DiskChanged));
     assert_eq!(text_of(&shell.editor, "idle.input_idle_minutes"), "9");
-    let _ = view::page(&shell.editor, &shell.config_errors);
+    let _ = view::page(&shell.editor, &shell.config_errors, &shell.devices);
 
     assert_eq!(
         update(&mut shell, Message::Settings(SettingsMsg::KeepEdits)),
@@ -516,4 +535,101 @@ when_locked = \"pause\"
         "{written}"
     );
     assert!(written.contains("when_locked = \"pause\""), "{written}");
+}
+
+#[test]
+fn overlay_help_says_the_panel_stays_on() {
+    let setting = schema::find("action.blank_method").unwrap();
+    let overlay = setting
+        .control
+        .choices()
+        .unwrap()
+        .iter()
+        .find(|choice| choice.value == "overlay")
+        .unwrap();
+    assert!(
+        overlay.help.contains("keeps the panel on"),
+        "{}",
+        overlay.help
+    );
+    assert!(
+        overlay.help.contains("blocks panel compensation"),
+        "{}",
+        overlay.help
+    );
+    assert_eq!(
+        controls::choice_note(setting, &FieldValue::Text("overlay".into())),
+        Some(overlay.help)
+    );
+}
+
+#[test]
+fn applying_a_preset_saves_without_a_profile_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(&path, "version = 1\n").unwrap();
+    let mut editor = Editor::load(&path).unwrap();
+    let _ = handle(
+        &mut editor,
+        Some(&path),
+        SettingsMsg::PreviewPreset(PresetKind::OledTvHooks),
+    );
+    let diff = editor.preset_changes();
+    assert_eq!(
+        diff.iter().map(|change| change.key).collect::<Vec<_>>(),
+        vec!["action.on_blank_cmd", "action.on_resume_cmd"]
+    );
+    let outcome = handle(&mut editor, Some(&path), SettingsMsg::ApplyPreset);
+    assert!(outcome.reload);
+    assert!(editor.preset().is_none());
+    assert!(!editor.is_dirty());
+
+    let written = fs::read_to_string(&path).unwrap();
+    let parsed: toml::Value = toml::from_str(&written).unwrap();
+    assert!(!has_profile_key(&parsed), "{written}");
+    let mut expected = Config::default();
+    expected.action.on_blank_cmd = super::presets::OLED_TV_BLANK_HOOK.to_owned();
+    expected.action.on_resume_cmd = super::presets::OLED_TV_RESUME_HOOK.to_owned();
+    assert_eq!(Config::from_toml_str(&written).unwrap().config, expected);
+}
+
+#[test]
+fn a_device_list_is_cleared_when_the_daemon_drops() {
+    let mut shell = Shell::new(vec![15]);
+    shell.link = Link::Up(Snapshot {
+        state: State::Active,
+        snooze_remaining_seconds: None,
+        config_errors: Vec::new(),
+    });
+    assert_eq!(
+        update(&mut shell, Message::OpenSettings),
+        vec![DaemonCall::RefreshDevices]
+    );
+    let catalog = Catalog {
+        outputs: vec!["HDMI-A-1".into()],
+        ..Catalog::default()
+    };
+    assert_eq!(
+        update(
+            &mut shell,
+            Message::Daemon(DaemonEvent::Devices(catalog.clone()))
+        ),
+        Vec::new()
+    );
+    assert_eq!(shell.devices.outputs, ["HDMI-A-1"]);
+    assert_eq!(
+        update(&mut shell, Message::Daemon(DaemonEvent::Down)),
+        Vec::new()
+    );
+    assert_eq!(shell.devices, Catalog::default());
+}
+
+fn has_profile_key(value: &toml::Value) -> bool {
+    match value {
+        toml::Value::Table(table) => {
+            table.keys().any(|key| key == "profile") || table.values().any(has_profile_key)
+        }
+        toml::Value::Array(items) => items.iter().any(has_profile_key),
+        _ => false,
+    }
 }

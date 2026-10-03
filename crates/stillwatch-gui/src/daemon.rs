@@ -35,6 +35,8 @@ pub async fn dispatch(proxy: &StillwatchProxy<'_>, call: DaemonCall) -> Result<(
         DaemonCall::Pause => proxy.pause().await,
         DaemonCall::Resume => proxy.resume().await,
         DaemonCall::Reload => proxy.reload().await.map(|_| ()),
+        // `watch` answers this before `dispatch`. The arm keeps the match closed.
+        DaemonCall::RefreshDevices => Ok(()),
     };
     result.map_err(Error::from)
 }
@@ -199,11 +201,26 @@ async fn publish_status(
     Ok(())
 }
 
+async fn refresh_devices(proxy: &StillwatchProxy<'_>, events: &mpsc::Sender<DaemonEvent>) {
+    match crate::settings::load_devices(proxy).await {
+        Ok(catalog) => {
+            let _ = events.send(DaemonEvent::Devices(catalog)).await;
+        }
+        Err(err) => tracing::warn!(%err, "device list"),
+    }
+}
+
 async fn on_call(
     proxy: Option<StillwatchProxy<'static>>,
     call: DaemonCall,
     events: &mpsc::Sender<DaemonEvent>,
 ) {
+    if matches!(call, DaemonCall::RefreshDevices) {
+        if let Some(proxy) = proxy {
+            refresh_devices(&proxy, events).await;
+        }
+        return;
+    }
     let Some(proxy) = proxy else {
         let _ = events
             .send(DaemonEvent::CallFailed(NOT_RUNNING.to_owned()))

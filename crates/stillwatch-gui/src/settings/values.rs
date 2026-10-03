@@ -61,6 +61,24 @@ impl RegionInput {
     }
 }
 
+/// How a value is shown in a preset diff.
+#[must_use]
+pub fn display(value: &FieldValue) -> String {
+    match value {
+        FieldValue::Bool(on) => on.to_string(),
+        FieldValue::Text(text) => text.clone(),
+        FieldValue::List(items) => {
+            if items.is_empty() {
+                "[]".to_owned()
+            } else {
+                items.join(", ")
+            }
+        }
+        FieldValue::Grid { cols, rows } => format!("{cols}x{rows}"),
+        FieldValue::Regions(regions) => format!("{} regions", regions.len()),
+    }
+}
+
 /// The value a control is editing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldValue {

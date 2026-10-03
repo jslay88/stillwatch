@@ -16,9 +16,10 @@ pub fn shell(shell: &Shell) -> Element<'_, Message> {
         .spacing(12)
         .height(Fill);
     content = match shell.page {
-        Page::Settings => {
-            content.push(settings::page(&shell.editor, &shell.config_errors).map(Message::Settings))
-        }
+        Page::Settings => content.push(
+            settings::page(&shell.editor, &shell.config_errors, &shell.devices)
+                .map(Message::Settings),
+        ),
         page => content
             .push(text(page.label()).size(24))
             .push(text(page.placeholder())),
