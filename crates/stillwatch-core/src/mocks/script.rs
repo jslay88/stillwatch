@@ -131,6 +131,18 @@ pub struct WatchRun {
     pub end: WatchEnd,
 }
 
+/// Adds `push_run` to a mock that keeps its script in a `script: ScriptedWatch`
+/// field.
+macro_rules! scripted_watch_methods {
+    () => {
+        /// Queues the events and ending for the next `watch` call.
+        pub fn push_run(&self, events: Vec<$crate::event::Event>, end: $crate::mocks::WatchEnd) {
+            self.script.push(events, end);
+        }
+    };
+}
+pub(super) use scripted_watch_methods;
+
 /// Scripted behavior for a backend's `watch` method.
 ///
 /// Each call to [`watch`](Self::watch) consumes the next [`WatchRun`]; with

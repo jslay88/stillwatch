@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::{CallLog, ScriptedWatch, WatchEnd};
+use super::script::scripted_watch_methods;
+use super::{CallLog, ScriptedWatch};
 use crate::backend::{BackendFuture, EventSink, IdleSource};
-use crate::event::Event;
 
 /// An [`IdleSource`] that plays scripted runs and records each timeout.
 #[derive(Debug, Default)]
@@ -19,10 +19,7 @@ impl MockIdleSource {
         Self::default()
     }
 
-    /// Queues the events and ending for the next `watch` call.
-    pub fn push_run(&self, events: Vec<Event>, end: WatchEnd) {
-        self.script.push(events, end);
-    }
+    scripted_watch_methods!();
 
     /// The timeout passed to each `watch` call, oldest first.
     #[must_use]
@@ -43,7 +40,7 @@ mod tests {
     use super::*;
     use crate::backend::BackendError;
     use crate::event::ActivityEvent;
-    use crate::mocks::{RecordingSink, now_or_never};
+    use crate::mocks::{RecordingSink, WatchEnd, now_or_never};
 
     #[test]
     fn plays_the_script_and_records_timeouts() {

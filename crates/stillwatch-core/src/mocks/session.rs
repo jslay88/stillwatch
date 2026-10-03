@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::{CallLog, ScriptedWatch, WatchEnd};
+use super::script::scripted_watch_methods;
+use super::{CallLog, ScriptedWatch};
 use crate::backend::{BackendFuture, EventSink, SessionMonitor};
-use crate::event::Event;
 
 /// A [`SessionMonitor`] with scripted events and a settable lock state.
 ///
@@ -23,10 +23,7 @@ impl MockSessionMonitor {
         Self::default()
     }
 
-    /// Queues the events and ending for the next `watch` call.
-    pub fn push_run(&self, events: Vec<Event>, end: WatchEnd) {
-        self.script.push(events, end);
-    }
+    scripted_watch_methods!();
 
     /// Sets what `is_locked` returns.
     pub fn set_locked(&self, locked: bool) {
@@ -60,7 +57,7 @@ impl SessionMonitor for MockSessionMonitor {
 mod tests {
     use super::*;
     use crate::event::SessionEvent;
-    use crate::mocks::{RecordingSink, now_or_never};
+    use crate::mocks::{RecordingSink, WatchEnd, now_or_never};
 
     #[test]
     fn tracks_lock_state_and_plays_events() {
