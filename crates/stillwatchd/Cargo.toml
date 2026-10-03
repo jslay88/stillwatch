@@ -9,6 +9,10 @@ repository.workspace = true
 authors.workspace = true
 publish.workspace = true
 
+[features]
+# A scriptable DaemonHandle for tests of the D-Bus service and its clients.
+fake = []
+
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
@@ -17,6 +21,7 @@ futures-util.workspace = true
 jiff.workspace = true
 stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-udev.workspace = true
 tracing.workspace = true
@@ -28,9 +33,11 @@ zbus.workspace = true
 proptest.workspace = true
 stillwatch-core = { workspace = true, features = ["mocks"] }
 stillwatch-testkit.workspace = true
+stillwatchd = { path = ".", features = ["fake"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber.workspace = true
+zbus = { workspace = true, features = ["p2p"] }
 
 [lints]
 workspace = true

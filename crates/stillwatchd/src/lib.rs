@@ -8,6 +8,7 @@ pub mod gamepad;
 pub mod history;
 pub mod idle;
 pub mod media;
+pub mod service;
 pub mod signals;
 pub mod supervise;
 mod wayland;

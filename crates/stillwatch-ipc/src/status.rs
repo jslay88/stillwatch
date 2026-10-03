@@ -1,8 +1,10 @@
 //! The `Status()` payload.
 
+use std::time::Duration;
+
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
-use stillwatch_core::state::State;
+use stillwatch_core::state::{State, StatusSnapshot};
 use stillwatch_core::stats::DetectionStats;
 
 /// Panel care tracking, for status and the GUI.
@@ -71,6 +73,29 @@ impl StatusPayload {
             panel_care: None,
         }
     }
+
+    /// The state machine's part of the status. Backends, config errors, and
+    /// panel care stay empty for the daemon to fill in.
+    ///
+    /// Snooze time left rounds up, so a running snooze never reads as 0.
+    #[must_use]
+    pub fn from_snapshot(snapshot: &StatusSnapshot) -> Self {
+        Self {
+            state_seconds: snapshot.in_state.as_secs(),
+            snooze_remaining_seconds: snapshot.snooze_remaining.map(ceil_secs),
+            idle: snapshot.idle,
+            locked: snapshot.locked,
+            media_playing: snapshot.media_playing,
+            last_detection: snapshot.last_detection.clone(),
+            ..Self::new(snapshot.state)
+        }
+    }
+}
+
+fn ceil_secs(duration: Duration) -> u64 {
+    duration
+        .as_secs()
+        .saturating_add(u64::from(duration.subsec_nanos() > 0))
 }
 
 #[cfg(test)]
@@ -79,6 +104,58 @@ mod tests {
 
     use super::*;
     use crate::json::{from_json, to_json};
+
+    #[test]
+    fn snapshot_maps_onto_the_payload() {
+        let detection = DetectionStats {
+            outputs: Vec::new(),
+            threshold: Threshold::new(70, ThresholdReason::Normal),
+            stale: true,
+        };
+        let snapshot = StatusSnapshot {
+            state: State::Snoozed,
+            in_state: Duration::from_millis(42_900),
+            snooze_remaining: Some(Duration::from_millis(599_001)),
+            idle: true,
+            locked: true,
+            media_playing: true,
+            last_detection: Some(detection.clone()),
+        };
+        assert_eq!(
+            StatusPayload::from_snapshot(&snapshot),
+            StatusPayload {
+                state_seconds: 42,
+                snooze_remaining_seconds: Some(600),
+                idle: true,
+                locked: true,
+                media_playing: true,
+                last_detection: Some(detection),
+                ..StatusPayload::new(State::Snoozed)
+            }
+        );
+    }
+
+    #[test]
+    fn whole_seconds_of_snooze_stay_exact() {
+        let snapshot = StatusSnapshot {
+            state: State::Active,
+            in_state: Duration::ZERO,
+            snooze_remaining: Some(Duration::from_secs(60)),
+            idle: false,
+            locked: false,
+            media_playing: false,
+            last_detection: None,
+        };
+        let payload = StatusPayload::from_snapshot(&snapshot);
+        assert_eq!(payload.snooze_remaining_seconds, Some(60));
+        assert_eq!(
+            StatusPayload::from_snapshot(&StatusSnapshot {
+                snooze_remaining: None,
+                ..snapshot
+            }),
+            StatusPayload::new(State::Active)
+        );
+    }
 
     #[test]
     fn full_status_round_trips() {
