@@ -57,6 +57,9 @@ pub(super) struct Engine<R> {
     pub(super) capture_gen: u64,
     pub(super) capture_task: Option<JoinHandle<()>>,
     pub(super) capture_warned: bool,
+    /// A portal stream was started for the current capture. Shutdown and the
+    /// next capture stop it before doing anything else.
+    pub(super) portal_away: bool,
     pub(super) prompt_gen: u64,
     pub(super) prompt_task: Option<JoinHandle<()>>,
     pub(super) action_task: Option<JoinHandle<()>>,
@@ -103,6 +106,7 @@ impl<R: ReloadSignal> Engine<R> {
             capture_gen: 0,
             capture_task: None,
             capture_warned: built.capture.is_none(),
+            portal_away: false,
             prompt_gen: 0,
             prompt_task: None,
             action_task: None,

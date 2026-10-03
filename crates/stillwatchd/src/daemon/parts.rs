@@ -14,6 +14,7 @@ use crate::action::ActionRunner;
 use crate::action::ddc::DdcBlanker;
 use crate::action::dpms::DpmsBlanker;
 use crate::capture::kwin::KwinCapture;
+use crate::capture::portal::{PortalCapture, Presence};
 use crate::clock::TokioClock;
 use crate::gamepad::{EvdevGamepadSource, GamepadSettings};
 use crate::history::HistoryRing;
@@ -39,6 +40,9 @@ pub(super) struct Built {
     /// Whether `activity.gamepad` is on. The source stays unwound when it isn't.
     pub gamepad_on: bool,
     pub capture: Option<Arc<dyn ScreenCapture>>,
+    /// Set when `capture` is a portal session, so the loop can start and stop
+    /// the stream. `None` for `KWin`, which has no sharing indicator.
+    pub portal: Option<Arc<dyn CaptureSession>>,
     pub capture_backend: Option<String>,
     pub media: Arc<dyn MediaWatcher>,
     pub prompter: Arc<dyn Prompter>,
@@ -78,16 +82,19 @@ impl Built {
 
 /// Builds the production backends for `config`.
 ///
-/// Portal capture is not in this tree. `auto` and `kwin` both try `ScreenShot2`,
-/// and anything else (including a `KWin` that isn't there) leaves capture
-/// empty so the daemon runs on input idle.
+/// `auto` and `kwin` try `ScreenShot2`. `portal` opens a `ScreenCast` session
+/// that stays stopped until a capture is wanted. If neither connects, capture
+/// stays empty and the daemon runs on input idle.
 ///
 /// # Errors
 ///
 /// The history ring's state directory can't be resolved.
 pub(super) async fn assemble(config: &Config) -> anyhow::Result<Built> {
     let clock: Arc<dyn Clock> = Arc::new(TokioClock);
-    let (capture, capture_backend) = open_capture(config).await;
+    let opened = open_capture(config).await;
+    let capture = opened.capture;
+    let portal = opened.portal;
+    let capture_backend = opened.name;
     let pads = Arc::new(EvdevGamepadSource::with_clock(
         &GamepadSettings::from(&config.activity),
         Arc::clone(&clock),
@@ -105,6 +112,7 @@ pub(super) async fn assemble(config: &Config) -> anyhow::Result<Built> {
         gamepad: Some(Arc::clone(&pads) as Arc<dyn GamepadSource>),
         gamepad_on: config.activity.gamepad,
         capture,
+        portal,
         capture_backend,
         media: Arc::new(MprisWatcher::session()),
         prompter: prompter as Arc<dyn Prompter>,
@@ -141,26 +149,82 @@ fn apply_hook(
     })
 }
 
-/// Tries `KWin` `ScreenShot2` unless the config forces the portal, which
-/// isn't built yet.
-pub(super) async fn open_capture(
-    config: &Config,
-) -> (Option<Arc<dyn ScreenCapture>>, Option<String>) {
+/// A capture backend whose stream must not run while the user is active.
+pub(super) trait CaptureSession: Send + Sync {
+    /// Open the stream. The sharing indicator comes up here.
+    fn set_away(&self) -> BackendFuture<'_, ()>;
+    /// Close the stream. The sharing indicator goes away.
+    fn set_active(&self) -> BackendFuture<'_, ()>;
+}
+
+impl CaptureSession for PortalCapture {
+    fn set_away(&self) -> BackendFuture<'_, ()> {
+        Box::pin(self.set_presence(Presence::Away))
+    }
+
+    fn set_active(&self) -> BackendFuture<'_, ()> {
+        Box::pin(self.set_presence(Presence::Active))
+    }
+}
+
+/// What [`open_capture`] connected.
+pub(super) struct OpenedCapture {
+    pub capture: Option<Arc<dyn ScreenCapture>>,
+    pub portal: Option<Arc<dyn CaptureSession>>,
+    pub name: Option<String>,
+}
+
+impl OpenedCapture {
+    fn none() -> Self {
+        Self {
+            capture: None,
+            portal: None,
+            name: None,
+        }
+    }
+}
+
+/// `portal` opens `ScreenCast`. `auto` and `kwin` try `ScreenShot2`.
+pub(super) async fn open_capture(config: &Config) -> OpenedCapture {
     if config.capture.backend == CaptureBackend::Portal {
-        tracing::warn!("portal capture isn't available yet; running on input idle only");
-        return (None, None);
+        return open_portal().await;
     }
     match KwinCapture::connect().await {
         Ok(capture) => {
             tracing::info!("using KWin ScreenShot2 capture");
-            (Some(Arc::new(capture)), Some("kwin".into()))
+            OpenedCapture {
+                capture: Some(Arc::new(capture)),
+                portal: None,
+                name: Some("kwin".into()),
+            }
         }
         Err(error) => {
             tracing::warn!(
                 %error,
                 "KWin ScreenShot2 capture is unavailable; running on input idle only"
             );
-            (None, None)
+            OpenedCapture::none()
+        }
+    }
+}
+
+async fn open_portal() -> OpenedCapture {
+    match PortalCapture::connect().await {
+        Ok(capture) => {
+            tracing::info!("using portal ScreenCast capture");
+            let portal = Arc::new(capture);
+            OpenedCapture {
+                capture: Some(Arc::clone(&portal) as Arc<dyn ScreenCapture>),
+                portal: Some(portal),
+                name: Some("portal".into()),
+            }
+        }
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                "portal capture is unavailable; running on input idle only"
+            );
+            OpenedCapture::none()
         }
     }
 }

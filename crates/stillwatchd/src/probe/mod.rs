@@ -19,8 +19,11 @@ use stillwatch_core::detector::BlockDetector;
 use stillwatch_ipc::config_file;
 use stillwatch_ipc::probe::MIN_PROBE_INTERVAL_MS;
 
+use stillwatch_core::config::CaptureBackend;
+
 use crate::args::Args;
 use crate::capture::kwin::KwinCapture;
+use crate::capture::portal::{PortalCapture, Presence};
 use crate::clock::TokioClock;
 use crate::media::MprisWatcher;
 use crate::signals::{self, Signals};
@@ -54,7 +57,6 @@ pub async fn run_cli(args: &Args) -> anyhow::Result<()> {
         count: args.count,
         downscale_width: config.stale.downscale_width,
     };
-    let capture = KwinCapture::connect().await?;
     let mut detector = BlockDetector::new(&config);
     let playing = Playing::default();
     watch_media(&playing);
@@ -63,16 +65,46 @@ pub async fn run_cli(args: &Args) -> anyhow::Result<()> {
         signals::wait_for_shutdown(&mut signals).await;
     };
     let mut out = std::io::stdout().lock();
-    run(
-        &capture,
-        &mut detector,
-        &TokioClock,
-        &settings,
-        || playing.snapshot(),
-        &mut out,
-        stop,
-    )
-    .await
+    match config.capture.backend {
+        CaptureBackend::Portal => {
+            let capture = PortalCapture::connect()
+                .await
+                .context("portal screen capture")?;
+            // Probe is an explicit capture. The stream stays up for this
+            // command and closes when it ends, including when startup fails.
+            let started = capture.set_presence(Presence::Away).await;
+            let result = match started {
+                Ok(()) => {
+                    run(
+                        &capture,
+                        &mut detector,
+                        &TokioClock,
+                        &settings,
+                        || playing.snapshot(),
+                        &mut out,
+                        stop,
+                    )
+                    .await
+                }
+                Err(error) => Err(error).context("starting the portal stream"),
+            };
+            capture.set_presence(Presence::Active).await.ok();
+            result
+        }
+        CaptureBackend::Auto | CaptureBackend::Kwin => {
+            let capture = KwinCapture::connect().await?;
+            run(
+                &capture,
+                &mut detector,
+                &TokioClock,
+                &settings,
+                || playing.snapshot(),
+                &mut out,
+                stop,
+            )
+            .await
+        }
+    }
 }
 
 /// `override` if given, otherwise `stale.check_interval_seconds`.

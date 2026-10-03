@@ -21,7 +21,7 @@ use tokio::time::timeout;
 
 use super::engine::{Engine, NopSignal, Wiring};
 use super::inbox::Incoming;
-use super::parts::{ApplyConfig, Built};
+use super::parts::{ApplyConfig, Built, CaptureSession};
 use super::shared::{Shared, lock};
 use crate::config_watch::{ReloadTrigger, Reloader};
 use crate::process::scripted::ScriptedRunner;
@@ -121,6 +121,7 @@ struct Parts {
     prompter: Arc<MockPrompter>,
     session: Arc<MockSessionMonitor>,
     capture: Option<Arc<MockCapture>>,
+    stream: Option<Arc<dyn CaptureSession>>,
 }
 
 impl Rig {
@@ -277,6 +278,7 @@ fn test_built(
             .capture
             .clone()
             .map(|capture| capture as Arc<dyn stillwatch_core::backend::ScreenCapture>),
+        portal: parts.stream.clone(),
         capture_backend,
         media: Arc::new(MockMediaWatcher::new()),
         prompter: parts.prompter.clone(),
@@ -318,6 +320,37 @@ fn stale_parts(capture: Option<Arc<MockCapture>>, prompter: Arc<MockPrompter>) -
         prompter,
         session: Arc::new(MockSessionMonitor::new()),
         capture,
+        stream: None,
+    }
+}
+
+/// Records portal away/active transitions. `set_away` and `set_active` return
+/// immediately, so the loop's order is what the test sees.
+struct RecordingStream {
+    log: Mutex<Vec<&'static str>>,
+}
+
+impl RecordingStream {
+    fn new() -> Self {
+        Self {
+            log: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn log(&self) -> Vec<&'static str> {
+        lock(&self.log).clone()
+    }
+}
+
+impl CaptureSession for RecordingStream {
+    fn set_away(&self) -> BackendFuture<'_, ()> {
+        lock(&self.log).push("away");
+        Box::pin(async { Ok(()) })
+    }
+
+    fn set_active(&self) -> BackendFuture<'_, ()> {
+        lock(&self.log).push("active");
+        Box::pin(async { Ok(()) })
     }
 }
 
@@ -351,6 +384,20 @@ async fn prompt_to_blank_and_no_capture_while_active() {
             .any(|call| matches!(call, BlankerCall::Blank(_))),
         "countdown blanks"
     );
+    rig.stop().await;
+}
+
+#[tokio::test]
+async fn portal_stream_runs_only_while_a_capture_is_wanted() {
+    let stream = Arc::new(RecordingStream::new());
+    let mut parts = stale_parts(Some(capture_ready()), Arc::new(MockPrompter::new()));
+    parts.stream = Some(Arc::clone(&stream) as Arc<dyn CaptureSession>);
+    let rig = rig(parts).await;
+
+    assert!(stream.log().is_empty(), "no stream while Active");
+    rig.idle();
+    rig.until_state(State::Prompting).await;
+    assert_eq!(stream.log(), ["away", "active"]);
     rig.stop().await;
 }
 

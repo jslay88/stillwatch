@@ -15,6 +15,7 @@ fake = []
 
 [dependencies]
 anyhow.workspace = true
+ashpd = { workspace = true, features = ["screencast"] }
 clap.workspace = true
 humantime.workspace = true
 ddc.workspace = true
@@ -23,6 +24,7 @@ evdev.workspace = true
 futures-util.workspace = true
 jiff.workspace = true
 notify.workspace = true
+pipewire.workspace = true
 smithay-client-toolkit.workspace = true
 stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true

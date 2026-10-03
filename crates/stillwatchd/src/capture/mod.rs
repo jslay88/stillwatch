@@ -3,3 +3,4 @@
 //! daemon luma grids, never frames.
 
 pub mod kwin;
+pub mod portal;
