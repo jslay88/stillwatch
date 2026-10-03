@@ -6,7 +6,7 @@ use crate::config::{Config, ConfigError, LoadOutcome};
 use crate::event::{ActivityEvent, CaptureFrame, Event};
 use crate::luma::LumaGrid;
 use crate::prompt::PromptOutcome;
-use crate::state::{State, StateMachine, StatusSnapshot};
+use crate::state::{StaleDetector, State, StateMachine, StatusSnapshot};
 use crate::time::{Clock, FakeClock, TimerId, TimerQueue};
 
 /// Upper bound on timer firings per `advance`, so a machine that keeps
@@ -87,6 +87,14 @@ impl Harness {
             Some(deadline) => self.advance(deadline.saturating_duration_since(self.clock.now())),
             None => Vec::new(),
         }
+    }
+
+    /// Swaps the machine's detector for `detector`, for example a real
+    /// [`BlockDetector`](crate::detector::BlockDetector). [`capture`](Self::capture)
+    /// and [`detector`](Self::detector) keep scripting the old one, so feed
+    /// the new one frames with [`send`](Self::send).
+    pub fn replace_detector(&mut self, detector: Box<dyn StaleDetector>) {
+        self.machine.replace_detector(detector);
     }
 
     /// Hands the machine a new config.

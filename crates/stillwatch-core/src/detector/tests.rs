@@ -320,13 +320,37 @@ fn unmonitored_outputs_are_skipped() {
 }
 
 #[test]
-fn means_that_do_not_match_the_grid_drop_the_output_for_the_tick() {
+fn means_that_do_not_match_the_grid_reset_the_output_and_count_nothing() {
     let mut detector = detector(2, 2);
-    feed(&mut detector, &[("DP-1", &[STILL; 4])], &[]);
+    persisted(&mut detector);
     let stats = feed(&mut detector, &[("DP-1", &[STILL; 3])], &[]);
-    assert_eq!(stats.outputs, Vec::new());
+    assert_eq!(stats.outputs.len(), 1);
+    assert_percent(stats.outputs[0].counted_percent, 0.0);
     assert!(!stats.stale);
+    assert!(!detector.ceiling().unwrap().stale);
     assert_eq!(detector.blocks("DP-1"), None);
+
+    let stats = feed(&mut detector, &[("DP-1", &[STILL; 4])], &[]);
+    assert_eq!(detector.blocks("DP-1").unwrap(), &[BlockState::Changed; 4]);
+    assert!(!stats.stale);
+}
+
+#[test]
+fn a_mismatched_output_blocks_require_all_but_not_any() {
+    for (require, stale) in [(StaleRequire::All, false), (StaleRequire::Any, true)] {
+        let mut config = config(2, 2);
+        config.stale.require = require;
+        config.stale.persist_checks = 1;
+        config.safety.ceiling_minutes = 1;
+        let mut detector = BlockDetector::new(&config);
+        let frames: [(&str, &[f32]); 2] = [("DP-1", &[STILL; 4]), ("DP-2", &[STILL; 3])];
+        feed(&mut detector, &frames, &[]);
+        let stats = feed(&mut detector, &frames, &[]);
+        assert!(stats.outputs[0].stale);
+        assert!(!stats.outputs[1].stale);
+        assert_eq!(stats.stale, stale, "{require:?}");
+        assert_eq!(detector.ceiling().unwrap().stale, stale, "{require:?}");
+    }
 }
 
 fn persisted(detector: &mut BlockDetector) {

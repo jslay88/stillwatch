@@ -1319,6 +1319,8 @@ dependencies = [
  "serde_path_to_error",
  "thiserror",
  "toml",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

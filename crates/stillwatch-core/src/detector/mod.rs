@@ -14,6 +14,10 @@
 //! Ignore regions are mapped to blocks using the output sizes from
 //! [`BlockDetector::set_outputs`]; see the `ignore` module for the exact rule.
 //! Until an output's size is known, its regions ignore nothing.
+//!
+//! The state machine feeds captures through [`StaleDetector`]:
+//! [`BlockDetector::observe`] reduces each [`CaptureFrame`] to block means
+//! and hands them to [`BlockDetector::observe_means`].
 
 mod aggregate;
 mod ceiling;
@@ -23,8 +27,12 @@ mod tracker;
 
 use std::collections::{BTreeMap, HashMap};
 
+use tracing::warn;
+
 use crate::config::{Config, SafetyConfig, StaleConfig};
-use crate::luma::OutputInfo;
+use crate::event::CaptureFrame;
+use crate::luma::{self, OutputInfo};
+use crate::state::StaleDetector;
 use crate::stats::{BlockState, DetectionStats};
 
 use tracker::{BlockRules, OutputTracker};
@@ -121,11 +129,44 @@ impl BlockDetector {
         self.stale.block_grid
     }
 
+    /// Feeds one capture tick of frames: each monitored frame's grid is
+    /// reduced to `block_grid` block means and handed to
+    /// [`observe_means`](Self::observe_means).
+    ///
+    /// A grid smaller than `block_grid` can't be split into blocks. That
+    /// output is logged and treated like means that don't match the grid.
+    pub fn observe(&mut self, frames: &[CaptureFrame], playing: &[String]) -> DetectionStats {
+        let [cols, rows] = self.grid();
+        let reduced: Vec<(&str, Option<luma::BlockMeans>)> = frames
+            .iter()
+            .filter(|frame| self.monitors(&frame.output))
+            .map(|frame| {
+                let means = luma::block_means(&frame.grid, cols, rows)
+                    .inspect_err(|error| {
+                        warn!(output = %frame.output, %error, "skipping output for this check");
+                    })
+                    .ok();
+                (frame.output.as_str(), means)
+            })
+            .collect();
+        let outputs: Vec<BlockMeans<'_>> = reduced
+            .iter()
+            .map(|(output, means)| BlockMeans {
+                output,
+                means: means.as_ref().map_or(&[], luma::BlockMeans::means),
+            })
+            .collect();
+        self.observe_means(&outputs, playing)
+    }
+
     /// Feeds one capture tick of block means. `playing` is the list of
     /// currently playing MPRIS player names.
     ///
     /// Unmonitored outputs are skipped. An output whose means don't match
-    /// `block_grid` has its history reset and is left out of this tick.
+    /// `block_grid` has its history reset and is reported with no counted
+    /// blocks until its next good capture. It is never stale itself, so with
+    /// `require = "all"` neither this tick nor [`ceiling`](Self::ceiling)
+    /// can call the screen stale from the other outputs alone.
     pub fn observe_means(
         &mut self,
         outputs: &[BlockMeans<'_>],
@@ -137,20 +178,18 @@ impl BlockDetector {
             if !self.monitors(frame.output) {
                 continue;
             }
-            if frame.means.len() != blocks {
-                self.trackers.remove(frame.output);
-                continue;
+            let tracker = self.trackers.entry(frame.output.to_owned()).or_default();
+            if frame.means.len() == blocks {
+                let mask = self.masks.get(frame.output).map_or(&[][..], Vec::as_slice);
+                tracker.update(frame.means, mask, &self.rules);
+            } else {
+                *tracker = OutputTracker::default();
             }
-            let mask = self.masks.get(frame.output).map_or(&[][..], Vec::as_slice);
-            self.trackers
-                .entry(frame.output.to_owned())
-                .or_default()
-                .update(frame.means, mask, &self.rules);
             observed.push(frame.output);
         }
         let states = observed
             .into_iter()
-            .filter_map(|name| Some((name, self.blocks(name)?)));
+            .filter_map(|name| Some((name, self.trackers.get(name)?.states())));
         aggregate::summarize(
             states,
             threshold::select(&self.stale, playing),
@@ -215,12 +254,28 @@ impl BlockDetector {
     }
 }
 
+impl StaleDetector for BlockDetector {
+    fn observe(&mut self, frames: &[CaptureFrame], playing: &[String]) -> DetectionStats {
+        Self::observe(self, frames, playing)
+    }
+
+    fn reset(&mut self) {
+        Self::reset(self);
+    }
+
+    fn ceiling(&self) -> Option<DetectionStats> {
+        Self::ceiling(self)
+    }
+}
+
 fn sorted(names: &[String]) -> Vec<&str> {
     let mut names: Vec<&str> = names.iter().map(String::as_str).collect();
     names.sort_unstable();
     names
 }
 
+#[cfg(test)]
+mod observe_tests;
 #[cfg(test)]
 mod proptests;
 #[cfg(test)]

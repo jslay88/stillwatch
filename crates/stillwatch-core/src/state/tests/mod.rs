@@ -1,4 +1,5 @@
 mod blank_path;
+mod block_detector;
 mod gamepad;
 mod history;
 mod locked;
