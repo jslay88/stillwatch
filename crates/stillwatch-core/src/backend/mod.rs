@@ -13,6 +13,7 @@
 
 mod blanker;
 mod capture;
+mod dimmer;
 mod error;
 mod gamepad;
 mod history;
@@ -27,6 +28,7 @@ use std::pin::Pin;
 
 pub use blanker::Blanker;
 pub use capture::ScreenCapture;
+pub use dimmer::Dimmer;
 pub use error::BackendError;
 pub use gamepad::{GamepadDevice, GamepadSource};
 pub use history::HistorySink;
@@ -59,6 +61,7 @@ mod tests {
         let _: Arc<dyn ScreenCapture> = Arc::new(MockCapture::new());
         let _: Arc<dyn Prompter> = Arc::new(MockPrompter::new());
         let _: Arc<dyn Blanker> = Arc::new(MockBlanker::new());
+        let _: Arc<dyn Dimmer> = Arc::new(MockBlanker::new());
         let _: Arc<dyn SessionMonitor> = Arc::new(MockSessionMonitor::new());
         let _: Arc<dyn MediaWatcher> = Arc::new(MockMediaWatcher::new());
         let _: Arc<dyn HistorySink> = Arc::new(MemoryHistory::new());
