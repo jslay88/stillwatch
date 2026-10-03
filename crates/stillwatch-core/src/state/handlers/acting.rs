@@ -24,7 +24,8 @@ impl StateHandler for Handler {
         } else {
             ctx.reblank_attempts = 0;
             match ctx.config.action.mode {
-                // The dim phase needs the overlay backend; until then it blanks directly.
+                // The daemon dims for `dim_seconds` (cancelled by `Unblank`)
+                // before executing this Blank when mode is dim_then_blank.
                 ActionMode::Blank | ActionMode::DimThenBlank => VecDeque::from([blank]),
                 ActionMode::LockAndBlank if ctx.locked => VecDeque::from([blank]),
                 ActionMode::LockAndBlank => VecDeque::from([ActionStep::Lock, blank]),

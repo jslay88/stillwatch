@@ -150,9 +150,14 @@ fn lock_and_blank_locks_first() {
 }
 
 #[test]
-fn dim_then_blank_blanks_until_dimming_exists() {
+fn dim_then_blank_still_sends_blank() {
+    // The machine emits Blank; ActionRunner dims first, then blanks.
     let mut h = Harness::with_config(&config(|c| c.action.mode = ActionMode::DimThenBlank));
-    h.to_blanked();
+    let commands = h.to_blanked();
+    assert!(commands.contains(&Command::Blank {
+        outputs: vec![],
+        method: BlankMethod::Dpms,
+    }));
     assert_eq!(h.state(), State::Blanked);
 }
 

@@ -55,6 +55,24 @@ Watching keyboard, mouse, and gamepads with a 1m idle timeout. Ctrl-C to stop.
 
 The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`), `--log-level <LEVEL>`, and `--capture-check <OUTPUT>` (see below). The log level comes from `--log-level`, then `RUST_LOG`, then `info` (the config's `logging.level` will slot in before the default once the daemon loads its config). Under systemd it logs to the journal, otherwise to stderr.
 
+## Display hooks
+
+`action.on_blank_cmd` and `action.on_resume_cmd` run as `sh -c` after a blank and on wake. They are fire-and-forget: a 10 second timeout, failures only go to the log, and they never hold up the state machine. `action.command` (when `action.mode = "command"`) uses the same runner and does not blank.
+
+Each hook gets:
+
+| Variable | Example | Meaning |
+| -- | -- | -- |
+| `STILLWATCH_OUTPUTS` | `HDMI-A-1,DP-1` | Connector names being acted on |
+| `STILLWATCH_METHOD` | `dpms` | `dpms`, `overlay`, or `ddc_standby` |
+| `STILLWATCH_REASON` | `blank` | `blank`, `resume`, `command`, or `panel_care` |
+
+```toml
+[action]
+on_blank_cmd = "lg-webos-cli screen-off"
+on_resume_cmd = "lg-webos-cli screen-on"
+```
+
 ## Screen capture on KDE
 
 On KDE, Stillwatch captures the screen through KWin's `org.kde.KWin.ScreenShot2` D-Bus interface. There's no screen-sharing indicator or prompt, but KWin only answers programs it has authorized, and that's done with a `.desktop` file:

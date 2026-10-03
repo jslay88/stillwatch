@@ -15,6 +15,8 @@ mod validate;
 
 use serde::{Deserialize, Serialize};
 
+use crate::command::HookKind;
+
 pub use changes::ConfigChanges;
 pub use error::ConfigError;
 pub use limits::Bounds;
@@ -88,6 +90,17 @@ impl Config {
     /// Returns [`ConfigError::Serialize`] if TOML serialization fails.
     pub fn to_toml_string(&self) -> Result<String, ConfigError> {
         Ok(toml::to_string(self)?)
+    }
+
+    /// The configured script for `kind`, which may be empty.
+    #[must_use]
+    pub fn hook_command(&self, kind: HookKind) -> &str {
+        match kind {
+            HookKind::OnBlank => &self.action.on_blank_cmd,
+            HookKind::OnResume => &self.action.on_resume_cmd,
+            HookKind::ActionCommand => &self.action.command,
+            HookKind::PanelCareTrigger => &self.panel_care.trigger_cmd,
+        }
     }
 }
 

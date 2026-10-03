@@ -26,6 +26,18 @@ pub enum BlankMethod {
     DdcStandby,
 }
 
+impl BlankMethod {
+    /// The config and hook-env name (`dpms`, `overlay`, `ddc_standby`).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Dpms => "dpms",
+            Self::Overlay => "overlay",
+            Self::DdcStandby => "ddc_standby",
+        }
+    }
+}
+
 /// A user-configured shell command the daemon runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -38,6 +50,19 @@ pub enum HookKind {
     PanelCareTrigger,
     /// `action.command`, when `action.mode = "command"`.
     ActionCommand,
+}
+
+impl HookKind {
+    /// Value of `STILLWATCH_REASON` for this hook.
+    #[must_use]
+    pub const fn reason(self) -> &'static str {
+        match self {
+            Self::OnBlank => "blank",
+            Self::OnResume => "resume",
+            Self::PanelCareTrigger => "panel_care",
+            Self::ActionCommand => "command",
+        }
+    }
 }
 
 /// An effect for the daemon to execute.
@@ -119,5 +144,8 @@ mod tests {
             serde_json::from_str::<BlankMethod>(r#""overlay""#).unwrap(),
             BlankMethod::Overlay
         );
+        assert_eq!(BlankMethod::DdcStandby.as_str(), "ddc_standby");
+        assert_eq!(HookKind::OnBlank.reason(), "blank");
+        assert_eq!(HookKind::ActionCommand.reason(), "command");
     }
 }

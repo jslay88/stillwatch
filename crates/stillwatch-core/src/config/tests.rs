@@ -347,3 +347,18 @@ fn keyed_issues_cover_parse_and_validation_errors() {
     let too_new = Config::from_toml_str("version = 99\n").unwrap_err();
     assert_eq!(too_new.keyed_issues(), []);
 }
+
+#[test]
+fn hook_command_reads_each_script() {
+    use crate::command::HookKind;
+
+    let mut config = Config::default();
+    config.action.on_blank_cmd = "blank".into();
+    config.action.on_resume_cmd = "resume".into();
+    config.action.command = "cmd".into();
+    config.panel_care.trigger_cmd = "care".into();
+    assert_eq!(config.hook_command(HookKind::OnBlank), "blank");
+    assert_eq!(config.hook_command(HookKind::OnResume), "resume");
+    assert_eq!(config.hook_command(HookKind::ActionCommand), "cmd");
+    assert_eq!(config.hook_command(HookKind::PanelCareTrigger), "care");
+}

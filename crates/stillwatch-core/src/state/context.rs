@@ -249,14 +249,7 @@ impl Ctx {
 
     /// Runs a hook if its command is configured.
     pub(super) fn hook(&mut self, kind: HookKind) {
-        let action = &self.config.action;
-        let command = match kind {
-            HookKind::OnBlank => &action.on_blank_cmd,
-            HookKind::OnResume => &action.on_resume_cmd,
-            HookKind::ActionCommand => &action.command,
-            HookKind::PanelCareTrigger => &self.config.panel_care.trigger_cmd,
-        };
-        if !command.trim().is_empty() {
+        if !self.config.hook_command(kind).trim().is_empty() {
             self.emit(Command::RunHook(kind));
         }
     }
