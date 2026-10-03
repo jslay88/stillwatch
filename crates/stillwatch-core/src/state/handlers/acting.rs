@@ -6,6 +6,7 @@ use super::{Ctx, State, StateHandler, Transition, is_input};
 use crate::command::{Command, HookKind};
 use crate::config::ActionMode;
 use crate::event::Event;
+use crate::history::HistoryKind;
 
 pub(super) struct Handler;
 
@@ -56,11 +57,11 @@ fn start_next(ctx: &mut Ctx) -> bool {
         ActionStep::Lock => ctx.emit(Command::Lock),
         ActionStep::Blank => {
             let outputs = ctx.action_outputs();
+            let method = ctx.config.action.blank_method;
             ctx.blanked = Some(outputs.clone());
-            ctx.emit(Command::Blank {
-                outputs,
-                method: ctx.config.action.blank_method,
-            });
+            ctx.emit(Command::Blank { outputs, method });
+            let entry = ctx.history(HistoryKind::Blank).with_blank_method(method);
+            ctx.emit(Command::Record(entry));
         }
     }
     true

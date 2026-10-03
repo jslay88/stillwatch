@@ -2,10 +2,10 @@
 
 use std::time::Duration;
 
-use super::{changed, transition_record};
+use super::{changed, effects, records, transition_record};
 use crate::command::{BlankMethod, Command};
 use crate::event::{ControlCommand, Event, SessionEvent};
-use crate::history::HistoryKind;
+use crate::history::{HistoryKind, PromptAnswer};
 use crate::mocks::Harness;
 use crate::prompt::{PromptOutcome, PromptRequest};
 use crate::state::State;
@@ -91,7 +91,7 @@ fn monitoring_to_prompting_on_stale_shows_the_prompt() {
     let entry = transition_record(&commands);
     assert!(entry.detection.is_some_and(|stats| stats.stale));
     assert_eq!(
-        commands[3..],
+        commands[3..5],
         [
             Command::ShowPrompt(PromptRequest {
                 countdown: MINUTE,
@@ -104,6 +104,7 @@ fn monitoring_to_prompting_on_stale_shows_the_prompt() {
             },
         ]
     );
+    assert!(matches!(&commands[5], Command::Record(e) if e.kind == HistoryKind::Prompt));
     assert!(!h.timers().contains(TimerId::Capture));
 }
 
@@ -112,14 +113,20 @@ fn prompting_to_snoozed_on_snooze() {
     let mut h = Harness::new();
     h.to_prompting();
     let commands = h.answer(PromptOutcome::Snooze(15 * MINUTE));
+    let answer = &records(&commands)[0];
+    assert_eq!(answer.kind, HistoryKind::PromptAnswered);
     assert_eq!(
-        commands[..2],
+        (answer.answer, answer.snooze_seconds),
+        (Some(PromptAnswer::Snooze), Some(900))
+    );
+    assert_eq!(
+        commands[1..3],
         [
             Command::CancelTimer(TimerId::PromptCountdown),
             Command::DismissPrompt
         ]
     );
-    assert_eq!(commands[2], changed(State::Prompting, State::Snoozed));
+    assert_eq!(commands[3], changed(State::Prompting, State::Snoozed));
     assert_eq!(transition_record(&commands).snooze_seconds, Some(900));
     assert_eq!(h.remaining(TimerId::SnoozeExpiry), Some(15 * MINUTE));
     assert!(!h.timers().contains(TimerId::PromptCountdown));
@@ -176,11 +183,28 @@ fn unanswered_prompts_still_time_out() {
     let failed = Event::PromptFailed {
         error: crate::backend::BackendError::Unavailable("no server".into()),
     };
-    assert_eq!(h.answer(PromptOutcome::Dismissed), vec![]);
-    assert_eq!(h.answer(PromptOutcome::CustomRequested), vec![]);
-    assert_eq!(h.send(failed), vec![]);
+    let mut answers = Vec::new();
+    for commands in [
+        h.answer(PromptOutcome::Dismissed),
+        h.answer(PromptOutcome::CustomRequested),
+        h.send(failed),
+    ] {
+        assert_eq!(effects(&commands), vec![]);
+        let entry = &records(&commands)[0];
+        assert_eq!(entry.kind, HistoryKind::PromptAnswered);
+        answers.push(entry.answer);
+    }
+    assert_eq!(
+        answers,
+        [
+            Some(PromptAnswer::Dismissed),
+            Some(PromptAnswer::Custom),
+            Some(PromptAnswer::Failed)
+        ]
+    );
     assert_eq!(h.state(), State::Prompting);
-    h.fire(TimerId::PromptCountdown);
+    let commands = h.fire(TimerId::PromptCountdown);
+    assert_eq!(records(&commands)[0].answer, Some(PromptAnswer::Timeout));
     assert_eq!(h.state(), State::Acting);
 }
 
@@ -352,7 +376,7 @@ fn snoozing_again_while_snoozed_rearms_the_timer() {
     let commands = h.send(ControlCommand::Snooze(60 * MINUTE));
     assert_eq!(h.state(), State::Snoozed);
     assert_eq!(h.remaining(TimerId::SnoozeExpiry), Some(60 * MINUTE));
-    let entries = super::records(&commands);
+    let entries = records(&commands);
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].kind, HistoryKind::Snooze);
     assert_eq!(entries[0].snooze_seconds, Some(3600));

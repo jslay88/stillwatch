@@ -1,5 +1,6 @@
 mod blank_path;
 mod gamepad;
+mod history;
 mod machine;
 mod snooze;
 mod table;
@@ -17,6 +18,20 @@ fn records(commands: &[Command]) -> Vec<HistoryEntry> {
             Command::Record(entry) => Some(entry.clone()),
             _ => None,
         })
+        .collect()
+}
+
+/// The kinds of the `Record` entries among `commands`, in order.
+fn record_kinds(commands: &[Command]) -> Vec<crate::history::HistoryKind> {
+    records(commands).iter().map(|entry| entry.kind).collect()
+}
+
+/// `commands` without the `Record` entries.
+fn effects(commands: &[Command]) -> Vec<Command> {
+    commands
+        .iter()
+        .filter(|command| !matches!(command, Command::Record(_)))
+        .cloned()
         .collect()
 }
 

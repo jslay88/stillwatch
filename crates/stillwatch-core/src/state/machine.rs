@@ -10,7 +10,7 @@ use super::snooze::{SnoozeError, validate_snooze};
 use super::status::StatusSnapshot;
 use super::transitions::rule_for;
 use crate::command::Command;
-use crate::config::Config;
+use crate::config::{Config, ConfigError, LoadOutcome};
 use crate::event::Event;
 use crate::history::HistoryKind;
 
@@ -76,6 +76,50 @@ impl StateMachine {
         self.ctx.config = config.clone();
         handler(self.state).reconfigure(&mut self.ctx);
         let entry = self.ctx.history(HistoryKind::ConfigReload);
+        self.ctx.emit(Command::Record(entry));
+        self.ctx.take_commands()
+    }
+
+    /// Records a reload that failed, while the current config stays in effect.
+    ///
+    /// Call it whenever the daemon rejects a new config file (parse,
+    /// migration, or validation errors). Only the number of problems is
+    /// recorded, never the messages, because they can contain paths.
+    pub fn config_reload_failed(
+        &mut self,
+        now: Instant,
+        wall: Timestamp,
+        error: &ConfigError,
+    ) -> Vec<Command> {
+        self.ctx.begin(now, wall);
+        let entry = self
+            .ctx
+            .history(HistoryKind::ConfigReloadFailed)
+            .with_error_count(problem_count(error));
+        self.ctx.emit(Command::Record(entry));
+        self.ctx.take_commands()
+    }
+
+    /// Records that `outcome` was migrated in memory from an older version.
+    /// Returns nothing when it wasn't.
+    ///
+    /// Call it after every successful load, at start-up (after
+    /// [`new`](Self::new)) and on reload (after
+    /// [`apply_config`](Self::apply_config)).
+    pub fn config_migrated(
+        &mut self,
+        now: Instant,
+        wall: Timestamp,
+        outcome: &LoadOutcome,
+    ) -> Vec<Command> {
+        let Some(from) = outcome.migrated_from else {
+            return Vec::new();
+        };
+        self.ctx.begin(now, wall);
+        let entry = self
+            .ctx
+            .history(HistoryKind::Migration)
+            .with_versions(from, outcome.config.version);
         self.ctx.emit(Command::Record(entry));
         self.ctx.take_commands()
     }
@@ -154,5 +198,13 @@ impl StateMachine {
                 None => return,
             }
         }
+    }
+}
+
+/// Validation failures report every broken rule; anything else is one problem.
+fn problem_count(error: &ConfigError) -> u32 {
+    match error {
+        ConfigError::Invalid(issues) => u32::try_from(issues.len()).unwrap_or(u32::MAX),
+        _ => 1,
     }
 }
