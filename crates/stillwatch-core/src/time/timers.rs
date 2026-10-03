@@ -24,6 +24,10 @@ pub enum TimerId {
     DimElapsed,
     /// Time to check whether the panel care reminder is due.
     PanelCareReminder,
+    /// The last gamepad input is `idle.input_idle_minutes` old. Armed by the
+    /// [`ActivityAggregator`](crate::activity::ActivityAggregator), not the
+    /// state machine.
+    GamepadIdle,
 }
 
 /// A queue of pending timers keyed by [`TimerId`].

@@ -1,6 +1,6 @@
 //! Calibration and troubleshooting commands.
 
-use super::unavailable;
+use super::{idle_test, unavailable};
 use crate::args::{IdleTestArgs, ProbeArgs};
 
 /// `stillwatch probe`
@@ -17,8 +17,8 @@ pub fn probe(args: &ProbeArgs) -> anyhow::Result<()> {
 ///
 /// # Errors
 ///
-/// Not implemented yet; always fails.
+/// See [`idle_test::run`].
 pub fn idle_test(args: &IdleTestArgs) -> anyhow::Result<()> {
     tracing::debug!(?args, "idle-test");
-    Err(unavailable("idle-test"))
+    idle_test::run(args)
 }

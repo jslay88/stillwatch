@@ -17,12 +17,17 @@ path = "src/main.rs"
 anyhow.workspace = true
 clap.workspace = true
 humantime.workspace = true
+jiff.workspace = true
 stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
+stillwatchd.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+stillwatch-core = { workspace = true, features = ["mocks"] }
 tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

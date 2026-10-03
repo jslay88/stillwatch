@@ -3,6 +3,7 @@
 pub mod config;
 pub mod daemon;
 pub mod diagnostics;
+pub mod idle_test;
 
 use crate::args::{Command, ConfigCommand};
 
@@ -48,7 +49,7 @@ mod tests {
 
     #[test]
     fn unimplemented_commands_say_so() {
-        let cases: [(&[&str], &str); 9] = [
+        let cases: [(&[&str], &str); 8] = [
             (&["status"], "status"),
             (&["snooze", "45m"], "snooze"),
             (&["cancel-snooze"], "cancel-snooze"),
@@ -57,7 +58,6 @@ mod tests {
             (&["reload"], "reload"),
             (&["history", "--since", "2h"], "history"),
             (&["probe"], "probe"),
-            (&["idle-test"], "idle-test"),
         ];
         for (args, name) in cases {
             let err = dispatch_args(args).unwrap_err();

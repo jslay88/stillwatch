@@ -17,6 +17,21 @@ pub fn parse_positive(text: &str) -> Result<Duration, String> {
     Ok(duration)
 }
 
+/// Like [`parse_positive`], except a bare number means minutes, so
+/// `--minutes 1` reads naturally.
+///
+/// # Errors
+///
+/// The same as [`parse_positive`].
+pub fn parse_minutes_or_duration(text: &str) -> Result<Duration, String> {
+    let text = text.trim();
+    if !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit()) {
+        parse_positive(&format!("{text}m"))
+    } else {
+        parse_positive(text)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -37,6 +52,26 @@ mod tests {
                 parse_positive(text),
                 Err("duration must be greater than zero".to_owned())
             );
+        }
+    }
+
+    #[test]
+    fn bare_numbers_are_minutes() {
+        assert_eq!(parse_minutes_or_duration("1"), Ok(Duration::from_mins(1)));
+        assert_eq!(
+            parse_minutes_or_duration(" 15 "),
+            Ok(Duration::from_mins(15))
+        );
+        assert_eq!(
+            parse_minutes_or_duration("30s"),
+            Ok(Duration::from_secs(30))
+        );
+        assert_eq!(
+            parse_minutes_or_duration("0"),
+            Err("duration must be greater than zero".to_owned())
+        );
+        for text in ["", "soon", "99999999999999999999999"] {
+            assert!(parse_minutes_or_duration(text).is_err(), "{text:?}");
         }
     }
 

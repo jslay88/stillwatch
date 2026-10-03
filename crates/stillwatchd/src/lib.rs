@@ -3,7 +3,9 @@
 //! For now it sets up logging, reports where its config lives, and runs until
 //! SIGTERM or SIGINT. The idle, capture, and action loop plugs in here later.
 
+pub mod activity;
 pub mod args;
+pub mod clock;
 pub mod gamepad;
 pub mod history;
 pub mod idle;

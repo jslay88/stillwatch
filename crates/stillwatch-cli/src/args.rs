@@ -7,7 +7,7 @@ use clap::builder::PossibleValuesParser;
 use clap::{Args, Parser, Subcommand};
 use stillwatch_ipc::logging::LEVELS;
 
-use crate::duration::parse_positive;
+use crate::duration::{parse_minutes_or_duration, parse_positive};
 
 /// Control and inspect the Stillwatch daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
@@ -90,8 +90,8 @@ pub struct ProbeArgs {
 /// Arguments for `stillwatch idle-test`.
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
 pub struct IdleTestArgs {
-    /// Idle timeout to test with [default: `idle.input_idle_minutes`]
-    #[arg(long, value_name = "DURATION", value_parser = parse_positive)]
+    /// Idle timeout to test with, e.g. 30s or 2m; a bare number is minutes [default: `idle.input_idle_minutes`]
+    #[arg(long, visible_alias = "minutes", value_name = "DURATION", value_parser = parse_minutes_or_duration)]
     pub timeout: Option<Duration>,
 }
 

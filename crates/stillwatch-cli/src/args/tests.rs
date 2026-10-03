@@ -146,6 +146,27 @@ fn idle_test() {
 }
 
 #[test]
+fn idle_test_takes_minutes_as_a_bare_number() {
+    for args in [
+        ["idle-test", "--minutes", "1"],
+        ["idle-test", "--timeout", "1"],
+        ["idle-test", "--minutes", "60s"],
+    ] {
+        assert_eq!(
+            command(&args),
+            Command::IdleTest(IdleTestArgs {
+                timeout: Some(minutes(1))
+            }),
+            "{args:?}"
+        );
+    }
+    let err = parse(&["idle-test", "--minutes", "0"]).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    let err = parse(&["idle-test", "--minutes", "1", "--timeout", "2"]).unwrap_err();
+    assert_eq!(err.kind(), ErrorKind::ArgumentConflict);
+}
+
+#[test]
 fn config_init() {
     assert_eq!(
         command(&["config", "init"]),

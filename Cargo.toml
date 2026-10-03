@@ -32,6 +32,7 @@ publish = false
 stillwatch-core = { path = "crates/stillwatch-core" }
 stillwatch-ipc = { path = "crates/stillwatch-ipc" }
 stillwatch-testkit = { path = "crates/stillwatch-testkit" }
+stillwatchd = { path = "crates/stillwatchd" }
 
 # Async runtime and utilities
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "process", "fs", "io-util", "net"] }

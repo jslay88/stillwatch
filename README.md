@@ -15,12 +15,23 @@ stillwatch resume
 stillwatch reload
 stillwatch history [--since <DURATION>] [--json]
 stillwatch probe [--interval <DURATION>]
-stillwatch idle-test [--timeout <DURATION>]
+stillwatch idle-test [--timeout <DURATION>] # alias --minutes, a bare number is minutes
 stillwatch config init [--force] [PATH]
 stillwatch config check [PATH]
 ```
 
 Most commands are stubs until the daemon's D-Bus service lands. `stillwatch <command> --help` has details.
+
+`stillwatch idle-test` runs the daemon's idle and gamepad sources locally, no daemon needed, and prints a timestamped line each time the combined state changes: `idle`, `active (keyboard/mouse)`, or `active (gamepad: <name>)`. You only count as idle once the compositor reports input idle and no gamepad has moved past the deadzone for the timeout (default `idle.input_idle_minutes`). Ctrl-C stops it.
+
+```
+$ stillwatch idle-test --minutes 1
+Watching keyboard, mouse, and gamepads with a 1m idle timeout. Ctrl-C to stop.
+2026-10-02 20:41:07  idle
+2026-10-02 20:41:30  active (gamepad: Xbox Wireless Controller)
+2026-10-02 20:42:30  idle
+2026-10-02 20:42:51  active (keyboard/mouse)
+```
 
 The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`) and `--log-level <LEVEL>`. The log level comes from `--log-level`, then `RUST_LOG`, then `info` (the config's `logging.level` will slot in before the default once the daemon loads its config). Under systemd it logs to the journal, otherwise to stderr.
 
