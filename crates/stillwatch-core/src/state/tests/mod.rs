@@ -1,3 +1,4 @@
+mod answer_grace;
 mod blank_path;
 mod block_detector;
 mod gamepad;

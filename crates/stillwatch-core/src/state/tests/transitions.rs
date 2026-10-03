@@ -144,10 +144,17 @@ fn prompting_to_active_on_cancel() {
 }
 
 #[test]
-fn prompting_to_active_on_input() {
+fn prompting_to_active_once_the_answer_grace_after_input_passes() {
     let mut h = Harness::new();
     h.to_prompting();
-    let commands = h.input();
+    assert_eq!(
+        h.input(),
+        vec![Command::SetTimer {
+            id: TimerId::PromptAnswerGrace,
+            after: Duration::from_secs(10),
+        }]
+    );
+    let commands = h.fire(TimerId::PromptAnswerGrace);
     assert!(commands.contains(&Command::DismissPrompt));
     assert!(commands.contains(&changed(State::Prompting, State::Active)));
     assert!(h.timers().is_empty());
@@ -184,11 +191,7 @@ fn unanswered_prompts_still_time_out() {
         error: crate::backend::BackendError::Unavailable("no server".into()),
     };
     let mut answers = Vec::new();
-    for commands in [
-        h.answer(PromptOutcome::Dismissed),
-        h.answer(PromptOutcome::CustomRequested),
-        h.send(failed),
-    ] {
+    for commands in [h.answer(PromptOutcome::Dismissed), h.send(failed)] {
         assert_eq!(effects(&commands), vec![]);
         let entry = &records(&commands)[0];
         assert_eq!(entry.kind, HistoryKind::PromptAnswered);
@@ -196,11 +199,7 @@ fn unanswered_prompts_still_time_out() {
     }
     assert_eq!(
         answers,
-        [
-            Some(PromptAnswer::Dismissed),
-            Some(PromptAnswer::Custom),
-            Some(PromptAnswer::Failed)
-        ]
+        [Some(PromptAnswer::Dismissed), Some(PromptAnswer::Failed)]
     );
     assert_eq!(h.state(), State::Prompting);
     let commands = h.fire(TimerId::PromptCountdown);

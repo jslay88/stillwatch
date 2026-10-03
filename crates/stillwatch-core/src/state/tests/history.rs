@@ -11,6 +11,7 @@ use crate::history::{HistoryKind, PromptAnswer};
 use crate::mocks::Harness;
 use crate::prompt::PromptOutcome;
 use crate::state::State;
+use crate::time::TimerId;
 
 #[test]
 fn snooze_path_records_prompt_answer_and_snooze() {
@@ -56,7 +57,10 @@ fn cancel_and_prompter_timeout_are_recorded_before_the_transition() {
 fn input_during_a_prompt_is_a_transition_not_an_answer() {
     let mut h = Harness::new();
     h.to_prompting();
-    assert_eq!(record_kinds(&h.input()), [HistoryKind::Transition]);
+    assert_eq!(record_kinds(&h.input()), []);
+    let commands = h.fire(TimerId::PromptAnswerGrace);
+    assert_eq!(record_kinds(&commands), [HistoryKind::Transition]);
+    assert_eq!(records(&commands)[0].to, Some(State::Active));
 }
 
 #[test]

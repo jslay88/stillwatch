@@ -1,7 +1,7 @@
 //! `[prompt]`
 
 use super::{Choice, Control, Section, Setting, TimeUnit};
-use crate::config::limits::{ANY, POSITIVE};
+use crate::config::limits::{ANSWER_GRACE_SECONDS, ANY, POSITIVE};
 
 const STYLES: &[Choice] = &[
     Choice {
@@ -70,8 +70,20 @@ pub(super) const SECTION: Section = Section {
                 unit: TimeUnit::Seconds,
                 bounds: POSITIVE,
             },
-            "Seconds the prompt waits for an answer before the action runs. Any input \
-             cancels it.",
+            "Seconds the prompt waits for an answer before the action runs. After any \
+             input the action won't run: the prompt waits up to `answer_grace_seconds` \
+             for an answer, never past the countdown, then closes.",
+        ),
+        Setting::new(
+            "prompt.answer_grace_seconds",
+            "Time to answer after input",
+            Control::Duration {
+                unit: TimeUnit::Seconds,
+                bounds: ANSWER_GRACE_SECONDS,
+            },
+            "Seconds the prompt stays up after the first input, so the mouse move or key \
+             press that reaches it doesn't close it before you click. Picking Custom... \
+             restarts it. Unanswered, the prompt closes and nothing happens.",
         ),
         Setting::new(
             "prompt.snooze_presets_minutes",

@@ -103,14 +103,20 @@ fn prompt() -> impl Strategy<Value = PromptConfig> {
         PromptUrgency::Normal,
         PromptUrgency::Critical,
     ]);
-    let flags = (any::<bool>(), 1..=600u32, any::<bool>());
+    let flags = (any::<bool>(), 1..=600u32, 1..=120u32, any::<bool>());
     (style, urgency, flags, bounds).prop_map(
-        |(style, urgency, (fallback, countdown, cancel), (allow_custom, min, (max, presets)))| {
+        |(
+            style,
+            urgency,
+            (fallback, countdown, grace, cancel),
+            (allow_custom, min, (max, presets)),
+        )| {
             PromptConfig {
                 style,
                 urgency,
                 fallback_to_dialog: fallback,
                 countdown_seconds: countdown,
+                answer_grace_seconds: grace,
                 snooze_presets_minutes: presets,
                 allow_custom,
                 custom_min_minutes: min,

@@ -33,8 +33,16 @@ pub const TRANSITIONS: &[TransitionRule] = &[
     rule(Monitoring, Snoozed, "snooze command"),
     rule(Monitoring, Locked, "session locked"),
     rule(Prompting, Snoozed, "snooze"),
-    rule(Prompting, Active, "input or cancel, or suspend"),
-    rule(Prompting, Acting, "timeout"),
+    rule(
+        Prompting,
+        Active,
+        "cancel; after input: answer grace over, dismissed, or countdown over; or suspend",
+    ),
+    rule(
+        Prompting,
+        Acting,
+        "countdown over without input, or the prompter's timeout (blank now)",
+    ),
     rule(Acting, Blanked, "action completed"),
     rule(
         Acting,

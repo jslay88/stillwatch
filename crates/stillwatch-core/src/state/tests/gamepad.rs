@@ -28,7 +28,14 @@ fn gamepad_in_monitoring_counts_as_input() {
 #[test]
 fn gamepad_in_prompting_counts_as_input() {
     let mut h = reach(State::Prompting);
-    let commands = h.gamepad();
+    assert_eq!(
+        h.gamepad(),
+        vec![Command::SetTimer {
+            id: TimerId::PromptAnswerGrace,
+            after: Duration::from_secs(10),
+        }]
+    );
+    let commands = h.fire(TimerId::PromptAnswerGrace);
     assert!(commands.contains(&Command::DismissPrompt));
     assert!(commands.contains(&changed(State::Prompting, State::Active)));
 }

@@ -87,6 +87,8 @@ pub(super) struct Ctx {
     pub(super) last_gamepad: Option<Instant>,
     pub(super) last_detection: Option<DetectionStats>,
     pub(super) snooze_until: Option<Instant>,
+    /// When the prompt's answer grace runs out, once input armed it.
+    pub(super) answer_grace_until: Option<Instant>,
     pub(super) action_steps: VecDeque<ActionStep>,
     /// Outputs Stillwatch blanked and hasn't woken yet.
     pub(super) blanked: Option<Vec<String>>,
@@ -114,6 +116,7 @@ impl Ctx {
             last_gamepad: None,
             last_detection: None,
             snooze_until: None,
+            answer_grace_until: None,
             action_steps: VecDeque::new(),
             blanked: None,
             blank_method: config.action.blank_method,

@@ -95,6 +95,11 @@ pub(crate) const RANGE_RULES: &[RangeRule] = &[
         set: |c, v| c.prompt.countdown_seconds = v,
     },
     RangeRule {
+        key: "prompt.answer_grace_seconds",
+        allowed: 1..=120,
+        set: |c, v| c.prompt.answer_grace_seconds = v,
+    },
+    RangeRule {
         key: "prompt.custom_min_minutes",
         allowed: 1..=u32::MAX,
         set: |c, v| {
