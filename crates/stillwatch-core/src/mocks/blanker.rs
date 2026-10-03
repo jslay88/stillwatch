@@ -141,10 +141,12 @@ mod tests {
 
     #[test]
     fn plays_scripted_power_events() {
+        use crate::event::PowerKind;
         let blanker = MockBlanker::new();
         let woke = Event::DisplayPower {
             output: "HDMI-A-1".into(),
             on: true,
+            kind: PowerKind::Dpms,
         };
         blanker.push_power_run(vec![woke.clone()], WatchEnd::Hang);
         let sink = Arc::new(RecordingSink::new());

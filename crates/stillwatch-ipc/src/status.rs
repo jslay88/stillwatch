@@ -12,7 +12,8 @@ use stillwatch_core::stats::DetectionStats;
 pub struct PanelCareStatus {
     /// Screen-on time since the last standby of at least `min_standby_minutes`.
     pub screen_on_seconds: u64,
-    /// When that standby ended, if one was ever recorded.
+    /// Wall time when a standby reached `min_standby_minutes` and reset
+    /// screen-on time, if one ever has.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_standby: Option<Timestamp>,
     /// How many times the overlay was used instead of real standby.
@@ -88,6 +89,16 @@ impl StatusPayload {
             media_playing: snapshot.media_playing,
             last_detection: snapshot.last_detection.clone(),
             ..Self::new(snapshot.state)
+        }
+    }
+}
+
+impl From<stillwatch_core::panel::PanelRecord> for PanelCareStatus {
+    fn from(record: stillwatch_core::panel::PanelRecord) -> Self {
+        Self {
+            screen_on_seconds: record.screen_on_seconds,
+            last_standby: record.last_standby,
+            overlay_uses: record.overlay_uses,
         }
     }
 }

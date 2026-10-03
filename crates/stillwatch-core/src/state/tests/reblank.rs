@@ -6,7 +6,7 @@ use super::transitions::reach;
 use super::{changed, config, records_of, transition_record};
 use crate::command::{BlankMethod, Command};
 use crate::config::{ActionMode, Config, ReblankFallback};
-use crate::event::Event;
+use crate::event::{Event, PowerKind};
 use crate::history::HistoryKind;
 use crate::mocks::Harness;
 use crate::state::State;
@@ -41,10 +41,16 @@ fn waking_without_input_reblanks_after_the_grace_period() {
     let mut h = reach(State::Blanked);
     assert_eq!(
         h.display_on(),
-        vec![Command::SetTimer {
-            id: TimerId::ReblankGrace,
-            after: GRACE,
-        }]
+        vec![
+            Command::SetTimer {
+                id: TimerId::ReblankGrace,
+                after: GRACE,
+            },
+            Command::SetTimer {
+                id: TimerId::PanelCareReminder,
+                after: Duration::from_hours(4) + Duration::from_secs(1),
+            },
+        ]
     );
     h.advance(Duration::from_secs(10));
     // More wake reports don't push the re-blank back.
@@ -130,7 +136,8 @@ fn input_during_grace_cancels_the_reblank() {
             changed(State::Blanked, State::Active)
         ]
     );
-    assert!(h.timers().is_empty());
+    assert!(h.timers().contains(TimerId::PanelCareReminder));
+    assert!(!h.timers().contains(TimerId::ReblankGrace));
     assert_eq!(h.advance(GRACE), vec![]);
 }
 
@@ -149,7 +156,13 @@ fn attempts_count_per_blank_episode() {
 #[test]
 fn watchdog_off_ignores_wakes() {
     let mut h = blanked_with(|c| c.action.reblank_on_wake = false);
-    assert_eq!(h.display_on(), vec![]);
+    assert_eq!(
+        h.display_on(),
+        vec![Command::SetTimer {
+            id: TimerId::PanelCareReminder,
+            after: Duration::from_hours(4) + Duration::from_secs(1),
+        }]
+    );
     assert_eq!(h.send(Event::Timer(TimerId::ReblankGrace)), vec![]);
     assert_eq!(h.state(), State::Blanked);
 }
@@ -160,8 +173,15 @@ fn only_outputs_stillwatch_blanked_are_watched() {
     let other = Event::DisplayPower {
         output: "DP-2".into(),
         on: true,
+        kind: PowerKind::Dpms,
     };
-    assert_eq!(h.send(other), vec![]);
+    assert!(h.send(other).iter().any(|command| matches!(
+        command,
+        Command::SetTimer {
+            id: TimerId::PanelCareReminder,
+            ..
+        }
+    )));
     h.display_on();
     assert!(h.timers().contains(TimerId::ReblankGrace));
 
@@ -170,7 +190,13 @@ fn only_outputs_stillwatch_blanked_are_watched() {
         c.action.mode = ActionMode::Command;
         c.action.command = "my-screen-off".into();
     });
-    assert_eq!(h.display_on(), vec![]);
+    assert_eq!(
+        h.display_on(),
+        vec![Command::SetTimer {
+            id: TimerId::PanelCareReminder,
+            after: Duration::from_hours(4) + Duration::from_secs(1),
+        }]
+    );
 }
 
 #[test]

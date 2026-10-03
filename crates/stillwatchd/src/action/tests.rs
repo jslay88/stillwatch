@@ -354,6 +354,27 @@ async fn hooks_carry_env_and_do_not_block() {
 }
 
 #[tokio::test]
+async fn panel_care_trigger_uses_the_same_hook_runner() {
+    let f = Fixture::new(|c| c.panel_care.trigger_cmd = "pixel-clean".into());
+    assert_eq!(
+        f.runner
+            .execute(&Command::RunHook(HookKind::PanelCareTrigger))
+            .await,
+        None
+    );
+    f.flush_hooks().await;
+    let calls = f.commands.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].args, ["-c", "pixel-clean"]);
+    let env: Vec<_> = calls[0]
+        .env
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    assert!(env.contains(&(ENV_REASON, "panel_care")));
+}
+
+#[tokio::test]
 async fn hook_timeout_and_failure_are_logged_not_returned() {
     let f = Fixture::new(|c| c.action.on_blank_cmd = "hang".into());
     f.commands.push_error(CommandError::TimedOut {

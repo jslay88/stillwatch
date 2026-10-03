@@ -5,6 +5,7 @@ mod gamepad;
 mod history;
 mod locked;
 mod machine;
+mod panel;
 mod reblank;
 mod snooze;
 mod snoozed;

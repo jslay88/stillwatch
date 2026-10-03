@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use jiff::Timestamp;
 
 use super::State;
+use super::care;
 use super::context::{Ctx, Transition};
 use super::detector::StaleDetector;
 use super::handlers::{common, handler};
@@ -13,6 +14,7 @@ use crate::command::Command;
 use crate::config::{Config, ConfigError, LoadOutcome};
 use crate::event::Event;
 use crate::history::HistoryKind;
+use crate::panel::PanelRecord;
 
 /// The Stillwatch state machine: events in, commands out.
 ///
@@ -62,6 +64,7 @@ impl StateMachine {
                 self.go(next);
             }
         }
+        care::after_event(&mut self.ctx, event);
         self.ctx.take_commands()
     }
 
@@ -78,6 +81,7 @@ impl StateMachine {
         self.ctx.begin(now, wall);
         self.ctx.config = config.clone();
         self.ctx.detector.apply_config(config);
+        care::reconfigure(&mut self.ctx);
         handler(self.state).reconfigure(&mut self.ctx);
         let entry = self.ctx.history(HistoryKind::ConfigReload);
         self.ctx.emit(Command::Record(entry));
@@ -179,6 +183,19 @@ impl StateMachine {
     #[must_use]
     pub const fn displays_blanked(&self) -> bool {
         self.ctx.blanked.is_some()
+    }
+
+    /// Panel care counters when tracking is enabled.
+    ///
+    /// `None` when `panel_care.enabled` is false, so status omits the section.
+    #[must_use]
+    pub fn panel_record(&self, now: Instant) -> Option<PanelRecord> {
+        care::record(&self.ctx, now)
+    }
+
+    /// Continues from counters loaded out of `panel.json`.
+    pub fn restore_panel(&mut self, record: PanelRecord) {
+        care::restore(&mut self.ctx, record);
     }
 
     /// Takes `next` and any follow-ups its `enter` hook returns. Transitions

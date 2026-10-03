@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use stillwatch_core::backend::{BackendError, EventSink};
-use stillwatch_core::event::Event;
+use stillwatch_core::event::{Event, PowerKind};
 use tokio::sync::Notify;
 use tokio::time;
 
@@ -126,7 +126,11 @@ impl Shared {
             };
             if self.record(&output, on) {
                 tracing::info!(output, on, "DDC/CI power mode changed");
-                sink.send(Event::DisplayPower { output, on });
+                sink.send(Event::DisplayPower {
+                    output,
+                    on,
+                    kind: PowerKind::Ddc,
+                });
             }
         }
     }

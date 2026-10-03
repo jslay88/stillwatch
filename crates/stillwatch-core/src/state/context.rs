@@ -10,6 +10,7 @@ use crate::command::{BlankMethod, Command, HookKind};
 use crate::config::{ActionOutputs, Config};
 use crate::event::CaptureFrame;
 use crate::history::{DecisionContext, HistoryEntry, HistoryKind};
+use crate::panel::PanelTracker;
 use crate::prompt::{PromptRequest, StaleOutput};
 use crate::stats::DetectionStats;
 use crate::time::TimerId;
@@ -98,6 +99,10 @@ pub(super) struct Ctx {
     pub(super) reblank_attempts: u32,
     /// Between `PrepareForSleep` and `ResumedFromSleep`.
     pub(super) asleep: bool,
+    /// Screen-on tracking. Disabled config freezes it.
+    pub(super) panel: PanelTracker,
+    /// Deadline of [`TimerId::PanelCareReminder`], if this step armed it.
+    pub(super) panel_check: Option<Instant>,
     /// Timers armed and not yet fired or cancelled.
     armed: HashSet<TimerId>,
 }
@@ -122,6 +127,8 @@ impl Ctx {
             blank_method: config.action.blank_method,
             reblank_attempts: 0,
             asleep: false,
+            panel: PanelTracker::new(config.panel_care.clone()),
+            panel_check: None,
             armed: HashSet::new(),
         }
     }

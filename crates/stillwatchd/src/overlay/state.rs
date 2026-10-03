@@ -8,7 +8,7 @@ use smithay_client_toolkit::reexports::client::QueueHandle;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::registry::RegistryState;
 use stillwatch_core::backend::{BackendError, EventSink};
-use stillwatch_core::event::Event;
+use stillwatch_core::event::{Event, PowerKind};
 
 use super::Shade;
 use super::surface::{Overlay, Protocols};
@@ -169,6 +169,7 @@ impl OverlayState {
         self.sink.send(Event::DisplayPower {
             output: output.to_owned(),
             on,
+            kind: PowerKind::Overlay,
         });
     }
 }

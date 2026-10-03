@@ -13,8 +13,8 @@ pub trait Blanker: Send + Sync {
     /// Wakes the outputs. Unblanking an output that isn't blanked is a no-op.
     fn unblank<'a>(&'a self, outputs: &'a [String]) -> BackendFuture<'a, ()>;
 
-    /// Reports power changes as `Event::DisplayPower { output, on }`, so the
-    /// re-blank watchdog can notice a display that woke without input.
+    /// Reports power changes as `Event::DisplayPower { output, on, kind }`, so
+    /// the re-blank watchdog can notice a display that woke without input.
     ///
     /// For DPMS this is the compositor's per-output mode; for the overlay,
     /// `on: true` means the overlay surface went away. Blankers that can't
