@@ -6,6 +6,7 @@ members = [
     "crates/stillwatchd",
     "crates/stillwatch-cli",
     "crates/stillwatch-gui",
+    "crates/stillwatch-testkit",
     "xtask",
 ]
 default-members = [
@@ -14,6 +15,7 @@ default-members = [
     "crates/stillwatchd",
     "crates/stillwatch-cli",
     "crates/stillwatch-gui",
+    "crates/stillwatch-testkit",
 ]
 
 [workspace.package]
@@ -29,6 +31,7 @@ publish = false
 # Internal crates
 stillwatch-core = { path = "crates/stillwatch-core" }
 stillwatch-ipc = { path = "crates/stillwatch-ipc" }
+stillwatch-testkit = { path = "crates/stillwatch-testkit" }
 
 # Async runtime and utilities
 tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "process", "fs", "io-util", "net"] }

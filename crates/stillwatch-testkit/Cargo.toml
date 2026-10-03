@@ -1,0 +1,20 @@
+[package]
+name = "stillwatch-testkit"
+description = "Test helpers for Stillwatch backends: a private D-Bus session bus and fake services on it"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+zbus.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

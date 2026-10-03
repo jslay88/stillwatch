@@ -1262,6 +1262,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "stillwatch-testkit"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "stillwatchd"
 version = "0.1.0"
 dependencies = [
@@ -1272,12 +1281,14 @@ dependencies = [
  "proptest",
  "stillwatch-core",
  "stillwatch-ipc",
+ "stillwatch-testkit",
  "tokio",
  "tokio-udev",
  "tracing",
  "tracing-subscriber",
  "wayland-client",
  "wayland-protocols",
+ "zbus",
 ]
 
 [[package]]

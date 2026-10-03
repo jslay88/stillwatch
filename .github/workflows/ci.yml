@@ -57,6 +57,9 @@ jobs:
     name: test
     runs-on: ubuntu-latest
     container: archlinux:latest
+    env:
+      # Private-bus D-Bus tests fail instead of skipping when dbus-daemon is missing.
+      STILLWATCH_REQUIRE_DBUS: "1"
     steps:
       - name: Install git
         run: pacman -Syu --noconfirm --needed git
