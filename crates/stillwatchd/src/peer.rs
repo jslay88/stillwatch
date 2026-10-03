@@ -126,21 +126,24 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn resolves_when_the_owner_leaves() {
+    const NAME: &str = "org.example.StillwatchPeer";
+
+    async fn held_name() -> Option<(stillwatch_testkit::PrivateBus, Connection, Connection)> {
         let Ok(Some(bus)) = stillwatch_testkit::PrivateBus::start() else {
-            return;
+            return None;
         };
         let owner = bus.connect().await.unwrap();
-        owner
-            .request_name("org.example.StillwatchPeer")
-            .await
-            .unwrap();
+        owner.request_name(NAME).await.unwrap();
         let watcher = bus.connect().await.unwrap();
-        let waiting =
-            tokio::spawn(
-                async move { until_replaced(&watcher, "org.example.StillwatchPeer").await },
-            );
+        Some((bus, owner, watcher))
+    }
+
+    #[tokio::test]
+    async fn resolves_when_the_owner_leaves() {
+        let Some((_bus, owner, watcher)) = held_name().await else {
+            return;
+        };
+        let waiting = tokio::spawn(async move { until_replaced(&watcher, NAME).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
         drop(owner);
         let result = tokio::time::timeout(Duration::from_secs(2), waiting)
@@ -152,18 +155,10 @@ mod tests {
 
     #[tokio::test]
     async fn a_release_before_the_wait_is_polled_is_still_observed() {
-        let Ok(Some(bus)) = stillwatch_testkit::PrivateBus::start() else {
+        let Some((_bus, owner, watcher)) = held_name().await else {
             return;
         };
-        let owner = bus.connect().await.unwrap();
-        owner
-            .request_name("org.example.StillwatchPeer")
-            .await
-            .unwrap();
-        let watcher = bus.connect().await.unwrap();
-        let mut watch = NameWatch::arm(&watcher, "org.example.StillwatchPeer")
-            .await
-            .unwrap();
+        let mut watch = NameWatch::arm(&watcher, NAME).await.unwrap();
         assert!(watch.owner().is_some());
         drop(owner);
         tokio::time::sleep(Duration::from_millis(50)).await;
