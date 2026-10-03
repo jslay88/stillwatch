@@ -1,0 +1,14 @@
+{
+  "minTokens": 50,
+  "threshold": 0,
+  "format": ["rust"],
+  "ignore": [
+    "**/target/**",
+    "**/tests/**",
+    "**/tests.rs",
+    "**/benches/**",
+    "**/node_modules/**"
+  ],
+  "reporters": ["console"],
+  "exitCode": 1
+}

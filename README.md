@@ -24,6 +24,22 @@ Most commands are stubs until the daemon's D-Bus service lands. `stillwatch <com
 
 The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`) and `--log-level <LEVEL>`. The log level comes from `--log-level`, then `RUST_LOG`, then `info` (the config's `logging.level` will slot in before the default once the daemon loads its config). Under systemd it logs to the journal, otherwise to stderr.
 
+## Development
+
+Toolchains come from [asdf](https://asdf-vm.com/) (`.tool-versions`). The quality gates also need `cargo-nextest`, `cargo-llvm-cov`, `cargo-deny`, `cargo-machete`, and `jscpd` (`npm install -g jscpd`).
+
+```sh
+cargo xtask install-hooks   # pre-commit runs the fast gates (fmt, clippy, size)
+cargo xtask ci              # every gate, in the same order as CI
+cargo xtask ci --fast       # fmt, clippy, size only
+```
+
+Individual gates: `cargo xtask gate <fmt|clippy|size|jscpd|deny|machete|coverage|bench>`. A gate whose tool isn't installed is skipped with a message, `--strict` turns that into a failure.
+
+- `cargo xtask check-size [--max 400]` fails on any `.rs` file over 400 lines, not counting `#[cfg(test)]` items. Put big tests in a sibling `tests.rs` via `#[cfg(test)] mod tests;`.
+- `cargo xtask coverage` runs the tests under `cargo llvm-cov nextest` and requires 80% line coverage for the workspace and 90% for `stillwatch-core`. Binary `main.rs` files and `xtask` are excluded. The lcov report lands in `target/coverage/lcov.info`.
+- `jscpd` uses `.jscpd.json` (50 token minimum, tests excluded, any clone fails). `cargo deny` uses `deny.toml`.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT), at your option.
