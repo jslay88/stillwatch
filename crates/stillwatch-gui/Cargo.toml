@@ -10,6 +10,21 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+iced.workspace = true
+ksni.workspace = true
+stillwatch-core.workspace = true
+stillwatch-ipc.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+zbus.workspace = true
+
+[dev-dependencies]
+stillwatch-testkit.workspace = true
+stillwatchd = { workspace = true, features = ["fake"] }
 
 [lints]
 workspace = true

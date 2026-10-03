@@ -18,11 +18,17 @@ stillwatch probe [--interval <DURATION>] [--count <N>] [--json] [--standalone]
 stillwatch idle-test [--timeout <DURATION>] # alias --minutes, a bare number is minutes
 stillwatch config init [--force] [PATH]
 stillwatch config check [PATH]
+
+stillwatch-gui                  # tray; open the window from the menu
+stillwatch-gui settings          # tray, and the settings window immediately
+stillwatch-gui prompt            # tray, and the prompt placeholder
 ```
 
 `stillwatch <command> --help` has details. Durations use [humantime](https://docs.rs/humantime) syntax (`90s`, `45m`, `1h 30m`).
 
 Everything except `idle-test`, `config`, and `probe --standalone` talks to `stillwatchd` over D-Bus (`io.github.jslay88.Stillwatch` on the session bus).
+
+`stillwatch-gui` is the tray and the settings window. It talks to the same daemon. The window still opens when the daemon isn't running, and the tray icon changes until the daemon comes back (it reconnects on its own). A second `stillwatch-gui` hands off to the one already running instead of starting another tray. Quick snooze uses each `[prompt] snooze_presets_minutes` value. The Settings, Calibration, History, and Service pages are placeholders for now, and so is `prompt`.
 
 - **`status`**: state and time in it, snooze time left, idle/locked/media, the capture backend, the last stale check per output (persistent and dark percentages, threshold and why), panel care, and config errors if the last reload failed. `--json` prints one `StatusPayload` object.
 - **`snooze <DURATION>`**: the daemon checks it against the `[prompt]` snooze rules (a preset, or `custom_min_minutes` to `custom_max_minutes` with `allow_custom`) and says why if it doesn't fit.
