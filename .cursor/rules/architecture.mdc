@@ -1,0 +1,30 @@
+---
+description: Crate boundaries, settings schema, and the pixel privacy rule
+globs:
+alwaysApply: true
+---
+
+# Architecture
+
+## Core stays I/O-free
+
+- `stillwatch-core` does no I/O apart from parsing: no files, sockets, D-Bus, Wayland, processes, or real time. Use the injectable `Clock`.
+- The state machine is sans-IO: Events in, Commands out. The daemon executes Commands.
+
+## Backends implement core traits
+
+- Every backend in `stillwatchd` implements a trait from `stillwatch-core` (`IdleSource`, `ScreenCapture`, `Blanker`, ...), and each trait has a mock.
+- Need a new capability? Add or extend the trait in core first. Don't let the state machine depend on a concrete backend.
+- Wire types shared over D-Bus live in `stillwatch-ipc`, not in the daemon, CLI, or GUI.
+
+## Settings
+
+- A new setting goes into the config structs **and** the settings schema in `stillwatch-core`, with validation and a default. The schema coverage test fails otherwise.
+- Never read ad-hoc keys, env vars, or side files for behavior that should be a setting.
+- Regenerate `docs/config.md` when settings change.
+
+## Privacy
+
+- Frames are downscaled to a luma grid and dropped. Never write pixels or luma values to disk, logs, history, or D-Bus.
+- Only per-block states (changed, persistent, dark, ignored) and percentages leave the detector.
+- History and logs hold numbers and state names only: no window titles, no track metadata.

@@ -1,0 +1,17 @@
+---
+description: Definition of done checklist for every Linear issue
+alwaysApply: true
+---
+
+# Definition of done
+
+An issue is done only when all of these hold:
+
+- [ ] `cargo xtask ci` passes locally and CI is green on the PR.
+- [ ] Coverage held: workspace >= 80%, `stillwatch-core` >= 90%.
+- [ ] Every `.rs` file <= 400 lines excluding test modules; no `jscpd` clones.
+- [ ] New behavior has tests.
+- [ ] Docs updated. If settings changed, regenerate `docs/config.md`. If a design changed, update the Linear project document and the Decision log.
+- [ ] A summary comment is on the Linear issue: what changed, decisions made, follow-ups (filed as new issues).
+
+Don't report an issue as done with any box unchecked. Say which one is open and why.

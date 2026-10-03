@@ -1,0 +1,21 @@
+---
+description: Branch, PR, and commit rules, including no agent attribution
+alwaysApply: true
+---
+
+# Git workflow
+
+- One branch per Linear issue, named exactly the issue's Linear `gitBranchName`, created from `origin/main`.
+- One PR per issue, against `main`. The PR body ends with `Closes JUS-N`.
+- Squash merge only when CI is green. Never merge red or pending.
+- Commits are authored as Justin Slay, using the repo's configured git user. Don't override `user.name` or `user.email`.
+
+## No agent attribution
+
+Never add agent attribution in commits, PR titles or bodies, issue comments, or review replies. That means none of:
+
+- `Co-authored-by:` trailers for any agent or tool.
+- "Generated with ..." or "Made with ..." footers naming a tool.
+- Any mention that an AI or agent wrote the change.
+
+Attribution is Justin's choice alone.

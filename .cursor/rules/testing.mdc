@@ -1,0 +1,22 @@
+---
+description: Tests and coverage required for every behavior change
+alwaysApply: true
+---
+
+# Testing
+
+- Every behavior change ships with unit tests in the same change. Bug fixes include a test that fails without the fix.
+- Integration tests go in the crate's `tests/` directory.
+- Use `proptest` for the detector and for config validation.
+- Drive the state machine with the fake `Clock` and the mock backends from `stillwatch-core`. No real sleeps, no real compositor in unit tests.
+- Backend integration tests run against headless KWin (`kwin_wayland --virtual`).
+- GUI: keep logic in iced `update` and model functions and unit test them. `view` stays thin.
+
+## Coverage
+
+`cargo xtask coverage` enforces, and CI fails below:
+
+- **>= 80%** line coverage for the workspace.
+- **>= 90%** line coverage for `stillwatch-core`.
+
+The only exclusions are binary `main.rs` wiring files. Don't add exclusions to make the numbers pass; write the tests.
