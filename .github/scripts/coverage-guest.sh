@@ -45,10 +45,13 @@ if [[ ! -e /dev/kvm ]]; then
     die "/dev/kvm is missing (the job needs --device=/dev/kvm, not --privileged)"
 fi
 
-if ! pick_kernel >/dev/null 2>&1 || ! command -v qemu-system-x86_64 >/dev/null || ! command -v virtiofsd >/dev/null || ! command -v mkinitcpio >/dev/null || ! command -v gcc >/dev/null; then
+# The virtiofsd package ships /usr/lib/virtiofsd and no PATH entry.
+virtiofsd_bin=/usr/lib/virtiofsd
+if ! pick_kernel >/dev/null 2>&1 || ! command -v qemu-system-x86_64 >/dev/null || [[ ! -x $virtiofsd_bin ]] || ! command -v mkinitcpio >/dev/null || ! command -v gcc >/dev/null; then
     command -v pacman >/dev/null || die "need qemu, virtiofsd, mkinitcpio, gcc, and a kernel with vgem"
     pacman -S --noconfirm --needed linux qemu-system-x86 virtiofsd gcc || true
 fi
+[[ -x $virtiofsd_bin ]] || die "virtiofsd is not installed at $virtiofsd_bin"
 
 kimage=$(pick_kernel) || die "no kernel image with a vgem module"
 kver=$(basename "$(dirname "$kimage")")
@@ -100,13 +103,11 @@ rm -f "$statusfile"
     printf 'export LANG=%q\n' "${LANG:-C.UTF-8}"
 } >"$envfile"
 
-# /tmp, not the workspace: virtiofsd unlinks the socket if it exits during
-# setup, and some CI mounts reject a unix socket under the checkout.
+# /tmp: virtiofsd unlinks the socket if setup exits.
 sock=/tmp/stillwatch-guest-vfs.sock
 rm -f "$sock"
-# Container defaults kill this before the socket stays up: seccomp install,
-# raising RLIMIT_NOFILE, and walking every mount under --shared-dir /.
-virtiofsd --sandbox none --seccomp none --rlimit-nofile=0 --no-announce-submounts \
+# Skip seccomp, the NOFILE bump, and the mount walk. Those fail in the job container.
+"$virtiofsd_bin" --sandbox none --seccomp none --rlimit-nofile=0 --no-announce-submounts \
     --socket-path "$sock" --shared-dir / --inode-file-handles=never \
     >target/guest-virtiofsd.log 2>&1 &
 vfs_pid=$!
