@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use super::{ScriptedWatch, WatchEnd};
+use super::ScriptedWatch;
+use super::script::scripted_watch_methods;
 use crate::backend::{BackendFuture, EventSink, MediaWatcher};
-use crate::event::Event;
 use crate::sync::lock;
 
 /// A [`MediaWatcher`] with scripted events and a settable player list.
@@ -19,10 +19,7 @@ impl MockMediaWatcher {
         Self::default()
     }
 
-    /// Queues the events and ending for the next `watch` call.
-    pub fn push_run(&self, events: Vec<Event>, end: WatchEnd) {
-        self.script.push(events, end);
-    }
+    scripted_watch_methods!();
 
     /// Replaces what `players` returns.
     pub fn set_players(&self, players: Vec<String>) {
@@ -43,7 +40,8 @@ impl MediaWatcher for MockMediaWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mocks::{RecordingSink, now_or_never};
+    use crate::event::Event;
+    use crate::mocks::{RecordingSink, WatchEnd, now_or_never};
 
     #[test]
     fn plays_media_events_and_lists_players() {

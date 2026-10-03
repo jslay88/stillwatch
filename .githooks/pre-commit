@@ -1,0 +1,3 @@
+#!/bin/sh
+# Fast quality gates. Install with `cargo xtask install-hooks`.
+exec cargo xtask ci --fast

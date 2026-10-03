@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use super::{ScriptedWatch, WatchEnd};
+use super::ScriptedWatch;
+use super::script::scripted_watch_methods;
 use crate::backend::{BackendFuture, EventSink, GamepadDevice, GamepadSource};
-use crate::event::Event;
 use crate::sync::lock;
 
 /// A [`GamepadSource`] with scripted activity and a settable device list.
@@ -19,10 +19,7 @@ impl MockGamepadSource {
         Self::default()
     }
 
-    /// Queues the events and ending for the next `watch` call.
-    pub fn push_run(&self, events: Vec<Event>, end: WatchEnd) {
-        self.script.push(events, end);
-    }
+    scripted_watch_methods!();
 
     /// Replaces what `devices` returns.
     pub fn set_devices(&self, devices: Vec<GamepadDevice>) {
@@ -50,7 +47,8 @@ impl GamepadSource for MockGamepadSource {
 mod tests {
     use super::*;
     use crate::event::ActivityEvent;
-    use crate::mocks::{RecordingSink, now_or_never};
+    use crate::event::Event;
+    use crate::mocks::{RecordingSink, WatchEnd, now_or_never};
 
     #[test]
     fn emits_scripted_activity_and_lists_devices() {
