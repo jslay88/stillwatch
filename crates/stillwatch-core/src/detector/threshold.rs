@@ -6,15 +6,11 @@ use crate::stats::{Threshold, ThresholdReason};
 
 /// The threshold for a capture, given the names of every playing player.
 ///
-/// A player is ignored when any `media_ignore_players` entry is a
-/// case-insensitive substring of its name, so `"spotify"` also matches
-/// `org.mpris.MediaPlayer2.spotify`. `media_stale_percent = 0` disables the
+/// Players are matched against `media_ignore_players` by
+/// [`StaleConfig::media_playing`]. `media_stale_percent = 0` disables the
 /// media threshold.
 pub(crate) fn select(stale: &StaleConfig, playing: &[String]) -> Threshold {
-    let media = stale.media_stale_percent > 0
-        && playing
-            .iter()
-            .any(|player| !is_ignored(player, &stale.media_ignore_players));
+    let media = stale.media_stale_percent > 0 && stale.media_playing(playing);
     if media {
         Threshold::new(percent(stale.media_stale_percent), ThresholdReason::Media)
     } else {
@@ -25,13 +21,6 @@ pub(crate) fn select(stale: &StaleConfig, playing: &[String]) -> Threshold {
 /// Clamps a validated 0-100 config percentage into a [`Threshold`] percent.
 pub(crate) fn percent(value: u32) -> u8 {
     u8::try_from(value.min(100)).unwrap_or(100)
-}
-
-fn is_ignored(player: &str, ignore: &[String]) -> bool {
-    let player = player.to_lowercase();
-    ignore
-        .iter()
-        .any(|entry| player.contains(&entry.to_lowercase()))
 }
 
 #[cfg(test)]
@@ -55,9 +44,9 @@ mod tests {
     }
 
     #[test]
-    fn ignored_players_match_case_insensitive_substrings() {
+    fn only_ignored_players_keep_the_normal_threshold() {
         let stale = StaleConfig::default();
-        for name in ["spotify", "Spotify", "org.mpris.MediaPlayer2.spotify"] {
+        for name in ["spotify", "Spotify", "spotify.instance_7"] {
             assert_eq!(
                 select(&stale, &playing(&[name])).reason,
                 ThresholdReason::Normal,
