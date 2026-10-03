@@ -59,8 +59,9 @@ pub(crate) fn run(launch: Launch, exit_code: Arc<AtomicI32>) -> iced::Result {
 /// Centered, always on top, and kept open when the title bar is closed so
 /// the close can be sent as `Dismissed`.
 ///
-/// Always-on-top is winit's X11 `_NET_WM_STATE_ABOVE`. The GUI stays on
-/// iced's x11 backend; the Wayland backend is not enabled.
+/// Always-on-top is winit's X11 `_NET_WM_STATE_ABOVE` and, on Wayland, a
+/// layer above normal windows. winit picks Wayland when `WAYLAND_DISPLAY`
+/// is set and X11 otherwise.
 #[must_use]
 pub(crate) fn window_settings() -> window::Settings {
     window::Settings {

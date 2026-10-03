@@ -73,13 +73,13 @@ rustix = { version = "1.1", features = ["pipe", "fs", "process"] }
 clap = { version = "4.6", features = ["derive"] }
 humantime = "2.4"
 # tiny-skia, not wgpu: the shell does not need a GPU, and wgpu pulls unsound
-# `lru` plus unmaintained `paste`. x11 rather than wayland: winit's Wayland
-# backend forces wayland-backend's client_system feature on the whole
-# workspace, and that swaps stillwatchd onto libwayland.
+# `lru` plus unmaintained `paste`. `wayland` and `x11` are both on: winit
+# picks Wayland when `WAYLAND_DISPLAY` is set and X11 otherwise.
 iced = { version = "0.14", default-features = false, features = [
     "tokio",
     "canvas",
     "tiny-skia",
+    "wayland",
     "x11",
     "thread-pool",
     "linux-theme-detection",

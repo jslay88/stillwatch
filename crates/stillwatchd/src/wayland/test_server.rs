@@ -225,7 +225,7 @@ fn client_left(result: io::Result<()>) -> io::Result<bool> {
 }
 
 /// One event on the wire.
-fn encode(object: u32, opcode: u16, args: &[Arg<'_>]) -> Vec<u8> {
+pub(crate) fn encode(object: u32, opcode: u16, args: &[Arg<'_>]) -> Vec<u8> {
     let mut body = Vec::new();
     for arg in args {
         match arg {
