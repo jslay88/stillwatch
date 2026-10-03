@@ -1,8 +1,5 @@
 //! Parsing a config document: version check, migration, deserialization, validation.
 
-use std::io;
-use std::path::Path;
-
 use toml::{Table, Value};
 
 use super::migrate::{MIGRATIONS, MigrationNote, MigrationStep, migrate_with};
@@ -32,25 +29,6 @@ impl Config {
     /// keys or bad values, and [`ConfigError::Invalid`] with every broken rule.
     pub fn from_toml_str(input: &str) -> Result<LoadOutcome, ConfigError> {
         parse_with(MIGRATIONS, CURRENT_VERSION, input)
-    }
-
-    /// Reads and parses the config file at `path`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ConfigError::NotFound`] if the file doesn't exist, so the
-    /// caller can fall back to defaults, [`ConfigError::Io`] for other read
-    /// failures, and otherwise anything [`Config::from_toml_str`] returns.
-    pub fn load(path: &Path) -> Result<LoadOutcome, ConfigError> {
-        let input = std::fs::read_to_string(path).map_err(|source| {
-            let path = path.to_path_buf();
-            if source.kind() == io::ErrorKind::NotFound {
-                ConfigError::NotFound { path }
-            } else {
-                ConfigError::Io { path, source }
-            }
-        })?;
-        Self::from_toml_str(&input)
     }
 }
 

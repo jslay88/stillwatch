@@ -10,6 +10,9 @@ use super::ValidationIssue;
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     /// The config file doesn't exist; callers like the daemon run on defaults.
+    ///
+    /// Core never reads files; the file loader in `stillwatch-ipc` produces
+    /// this and [`ConfigError::Io`].
     #[error("config file not found: {}", path.display())]
     NotFound {
         /// Path that was looked up.

@@ -959,7 +959,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_path_to_error",
- "tempfile",
  "thiserror",
  "toml",
 ]
@@ -978,6 +977,7 @@ dependencies = [
  "serde",
  "serde_json",
  "stillwatch-core",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing-journald",

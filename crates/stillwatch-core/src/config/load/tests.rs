@@ -127,32 +127,3 @@ fn validation_failures_list_every_issue() {
     );
     assert_eq!(message.lines().count(), 5, "{message}");
 }
-
-#[test]
-fn load_reads_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("config.toml");
-    std::fs::write(&path, "[history]\nmax_entries = 50\n").unwrap();
-    let outcome = Config::load(&path).unwrap();
-    assert_eq!(outcome.config.history.max_entries, 50);
-}
-
-#[test]
-fn load_reports_missing_file_distinctly() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("config.toml");
-    let error = Config::load(&path).unwrap_err();
-    let ConfigError::NotFound { path: missing } = &error else {
-        panic!("expected not found, got {error:?}");
-    };
-    assert_eq!(missing, &path);
-    assert!(error.to_string().starts_with("config file not found: "));
-}
-
-#[test]
-fn load_reports_other_read_failures_as_io() {
-    let dir = tempfile::tempdir().unwrap();
-    let error = Config::load(dir.path()).unwrap_err();
-    assert!(matches!(error, ConfigError::Io { .. }), "{error:?}");
-    assert!(error.to_string().starts_with("failed to read "));
-}

@@ -1,9 +1,9 @@
 //! The versioned Stillwatch config (`~/.config/stillwatch/config.toml`).
 //!
 //! Every section takes its documented defaults for missing keys and rejects
-//! unknown ones. [`Config::from_toml_str`] and [`Config::load`] run the full
-//! pipeline: version check, in-memory migration, deserialization, and
-//! [`Config::validate`].
+//! unknown ones. [`Config::from_toml_str`] runs the full pipeline: version
+//! check, in-memory migration, deserialization, and [`Config::validate`].
+//! Reading the file is left to the caller (`stillwatch_ipc::config_file`).
 
 mod error;
 mod load;
