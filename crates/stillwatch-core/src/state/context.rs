@@ -10,7 +10,7 @@ use crate::command::{BlankMethod, Command, HookKind};
 use crate::config::{ActionOutputs, Config};
 use crate::event::CaptureFrame;
 use crate::history::{DecisionContext, HistoryEntry, HistoryKind};
-use crate::prompt::PromptRequest;
+use crate::prompt::{PromptRequest, StaleOutput};
 use crate::stats::DetectionStats;
 use crate::time::TimerId;
 
@@ -217,12 +217,15 @@ impl Ctx {
         stats
     }
 
-    pub(super) fn prompt_request(&self) -> PromptRequest {
+    pub(super) fn prompt_request(&self, detection: Option<&DetectionStats>) -> PromptRequest {
         let prompt = &self.config.prompt;
         PromptRequest {
             countdown: self.countdown(),
             presets: prompt_presets(prompt).collect(),
             allow_custom: prompt.allow_custom,
+            stale_outputs: detection
+                .map(StaleOutput::from_detection)
+                .unwrap_or_default(),
         }
     }
 

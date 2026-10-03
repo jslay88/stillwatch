@@ -81,6 +81,7 @@ mod tests {
             countdown: Duration::from_secs(60),
             presets: vec![Duration::from_mins(15), Duration::from_hours(1)],
             allow_custom: true,
+            stale_outputs: vec![],
         }
     }
 

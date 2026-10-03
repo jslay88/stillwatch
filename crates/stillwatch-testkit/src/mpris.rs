@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use zbus::Connection;
 use zbus::connection::Builder;
@@ -11,6 +11,7 @@ use zbus::names::InterfaceName;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::Value;
 
+use crate::sync::lock;
 use crate::{Error, PrivateBus};
 
 /// The object path every MPRIS player serves.
@@ -170,10 +171,6 @@ impl FakePlayer {
 
 fn metadata() -> HashMap<String, String> {
     HashMap::from([("xesam:title".to_owned(), SECRET_TITLE.to_owned())])
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]

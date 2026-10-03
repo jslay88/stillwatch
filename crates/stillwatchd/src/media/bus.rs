@@ -4,12 +4,13 @@
 use std::time::Duration;
 
 use stillwatch_core::backend::BackendError;
-use zbus::connection::Builder;
 use zbus::fdo::DBusProxy;
 use zbus::message::Type;
 use zbus::proxy::CacheProperties;
 use zbus::zvariant::OwnedValue;
 use zbus::{Connection, MatchRule};
+
+pub(crate) use crate::dbus::Bus;
 
 use super::players::{Player, PlayerSet};
 use super::properties::{
@@ -25,23 +26,10 @@ const PROPERTIES_INTERFACE: &str = "org.freedesktop.DBus.Properties";
 /// The arguments of the one `Get` call made to players.
 const STATUS_REQUEST: (&str, &str) = (PLAYER_INTERFACE, PLAYBACK_STATUS);
 
-/// Which bus to watch.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Bus {
-    /// The user's session bus.
-    Session,
-    /// A bus at an explicit address (tests use a private bus).
-    Address(String),
-}
-
 /// Opens a new connection to `bus`.
 pub(crate) async fn connect(bus: &Bus) -> Result<Connection, BackendError> {
-    let builder = match bus {
-        Bus::Session => Builder::session(),
-        Bus::Address(address) => Builder::address(address.as_str()),
-    }
-    .map_err(|err| BackendError::Unavailable(format!("session bus: {err}")))?;
-    builder
+    bus.builder()
+        .map_err(|err| BackendError::Unavailable(format!("session bus: {err}")))?
         .method_timeout(CALL_TIMEOUT)
         .build()
         .await

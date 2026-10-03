@@ -7,7 +7,7 @@ use crate::command::{BlankMethod, Command};
 use crate::event::{ControlCommand, Event, SessionEvent};
 use crate::history::{HistoryKind, PromptAnswer};
 use crate::mocks::Harness;
-use crate::prompt::{PromptOutcome, PromptRequest};
+use crate::prompt::{PromptOutcome, PromptRequest, StaleOutput};
 use crate::state::State;
 use crate::time::TimerId;
 
@@ -97,6 +97,10 @@ fn monitoring_to_prompting_on_stale_shows_the_prompt() {
                 countdown: MINUTE,
                 presets: vec![15 * MINUTE, 60 * MINUTE, 180 * MINUTE],
                 allow_custom: true,
+                stale_outputs: vec![StaleOutput {
+                    output: "HDMI-A-1".into(),
+                    unchanged_percent: 100,
+                }],
             }),
             Command::SetTimer {
                 id: TimerId::PromptCountdown,

@@ -24,7 +24,7 @@ pub(super) struct Handler;
 
 impl StateHandler for Handler {
     fn enter(&self, ctx: &mut Ctx, via: &Transition) -> Option<Transition> {
-        let request = ctx.prompt_request();
+        let request = ctx.prompt_request(via.detection.as_ref());
         let countdown = request.countdown;
         ctx.emit(Command::ShowPrompt(request));
         ctx.set_timer(TimerId::PromptCountdown, countdown);
