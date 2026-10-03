@@ -21,8 +21,13 @@ thiserror.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 proptest.workspace = true
 serde_json.workspace = true
+
+[[bench]]
+name = "detector"
+harness = false
 
 [lints]
 workspace = true
