@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+/lcov.info
+/coverage/
+/report/
+.jscpd-report/
