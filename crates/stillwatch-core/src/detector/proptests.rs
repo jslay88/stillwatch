@@ -4,7 +4,8 @@ use proptest::prelude::*;
 use proptest::sample::select;
 
 use super::*;
-use crate::config::IgnoreRegion;
+use crate::config::{IgnoreRegion, StaleRequire};
+use crate::luma::LumaGrid;
 use crate::stats::BlockCounts;
 
 const SIZE: u32 = 400;
@@ -113,5 +114,36 @@ proptest! {
             prop_assert!(!detector.observe_means(&frame, &[]).stale);
         }
         prop_assert!(detector.observe_means(&frame, &[]).stale);
+    }
+
+    #[test]
+    fn a_grid_that_does_not_fit_never_makes_the_screen_stale(
+        (width, height) in (1..12u32, 1..12u32),
+        (cols, rows) in (1..8u32, 1..8u32),
+        value in 16..=255u8,
+        persist_checks in 1..4u32,
+        require in select(vec![StaleRequire::All, StaleRequire::Any]),
+    ) {
+        let mut config = Config::default();
+        config.stale.block_grid = [cols, rows];
+        config.stale.persist_checks = persist_checks;
+        config.stale.require = require;
+        config.safety.ceiling_minutes = persist_checks;
+        let mut detector = BlockDetector::new(&config);
+        let frames = [
+            CaptureFrame { output: "DP-1".into(), grid: LumaGrid::filled(8, 8, value).unwrap() },
+            CaptureFrame { output: "DP-2".into(), grid: LumaGrid::filled(width, height, value).unwrap() },
+        ];
+        let fits = cols <= width && rows <= height;
+        for _ in 0..persist_checks {
+            prop_assert!(!detector.observe(&frames, &[]).stale);
+        }
+        let stats = detector.observe(&frames, &[]);
+        let expected = fits || require == StaleRequire::Any;
+        prop_assert_eq!(stats.stale, expected);
+        prop_assert_eq!(detector.ceiling().unwrap().stale, expected);
+        prop_assert_eq!(stats.outputs.len(), 2);
+        prop_assert_eq!(stats.outputs[1].stale, fits);
+        prop_assert_eq!(detector.blocks("DP-2").is_some(), fits);
     }
 }
