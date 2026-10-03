@@ -11,6 +11,7 @@ use stillwatch_core::time::Clock;
 use tokio::task::{self, AbortHandle, JoinError, JoinSet};
 
 use super::axis::{Axes, PadInput};
+use super::capability::{self, Verdict};
 use super::platform::{Hotplug, Pad, Platform};
 use super::registry::Registry;
 use super::settings::GamepadSettings;
@@ -81,6 +82,8 @@ struct Pads {
     tasks: JoinSet<()>,
     open: HashMap<PathBuf, AbortHandle>,
     denied: HashSet<PathBuf>,
+    /// Nodes that opened but aren't gamepads. Skipped until removed.
+    rejected: HashSet<PathBuf>,
 }
 
 impl Pads {
@@ -91,11 +94,12 @@ impl Pads {
             tasks: JoinSet::new(),
             open: HashMap::new(),
             denied: HashSet::new(),
+            rejected: HashSet::new(),
         }
     }
 
     fn open<P: Platform>(&mut self, platform: &P, node: PathBuf) {
-        if self.open.contains_key(&node) {
+        if self.open.contains_key(&node) || self.rejected.contains(&node) {
             return;
         }
         let pad = match platform.open(&node) {
@@ -107,6 +111,13 @@ impl Pads {
         };
         self.denied.remove(&node);
         let id = device_id(&node);
+        if let Verdict::Reject(reason) =
+            capability::check(pad.keys().iter().copied(), pad.axes().codes())
+        {
+            tracing::debug!(device = %id, name = pad.name(), %reason, "not a gamepad, skipping");
+            self.rejected.insert(node);
+            return;
+        }
         let ignored = self
             .shared
             .registry()
@@ -136,6 +147,7 @@ impl Pads {
 
     fn close(&mut self, node: &Path) {
         self.denied.remove(node);
+        self.rejected.remove(node);
         if let Some(handle) = self.open.get(node) {
             handle.abort();
             self.forget(node);

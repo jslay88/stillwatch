@@ -9,15 +9,21 @@ use super::platform::Pad;
 /// An evdev event node read through tokio, so an idle pad costs nothing.
 pub(crate) struct EvdevPad {
     name: String,
+    keys: Vec<u16>,
     axes: Axes,
     stream: EventStream,
 }
 
 impl EvdevPad {
-    /// Opens `node` and captures its axis ranges. Needs a tokio runtime.
+    /// Opens `node` and captures its keys and axis ranges. Needs a tokio
+    /// runtime.
     pub(crate) fn open(node: &Path) -> io::Result<Self> {
         let device = Device::open(node)?;
         let name = device.name().unwrap_or("Unknown gamepad").to_owned();
+        let keys = device
+            .supported_keys()
+            .map(|keys| keys.iter().map(|key| key.0).collect())
+            .unwrap_or_default();
         let axes = Axes::new(device.get_absinfo()?.map(|(code, info)| {
             (
                 code.0,
@@ -30,7 +36,12 @@ impl EvdevPad {
             )
         }));
         let stream = device.into_event_stream()?;
-        Ok(Self { name, axes, stream })
+        Ok(Self {
+            name,
+            keys,
+            axes,
+            stream,
+        })
     }
 }
 
@@ -49,6 +60,10 @@ fn classify(event: InputEvent) -> PadInput {
 impl Pad for EvdevPad {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn keys(&self) -> &[u16] {
+        &self.keys
     }
 
     fn axes(&self) -> Axes {

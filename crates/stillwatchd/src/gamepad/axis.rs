@@ -155,6 +155,11 @@ impl Axes {
         )
     }
 
+    /// The declared axis codes, in no particular order.
+    pub(crate) fn codes(&self) -> impl Iterator<Item = u16> + '_ {
+        self.0.keys().copied()
+    }
+
     /// Whether `input` counts as gamepad activity. Buttons, relative axes,
     /// and hats always do; analog axes only past the deadzone; axes the
     /// device never declared don't.
