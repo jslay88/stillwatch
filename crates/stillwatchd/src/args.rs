@@ -1,6 +1,8 @@
 //! Command-line arguments for `stillwatchd`.
 
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::Parser;
 use clap::builder::PossibleValuesParser;
@@ -23,6 +25,25 @@ pub struct Args {
     /// format, and exit (checks the `.desktop` authorization)
     #[arg(long, value_name = "OUTPUT")]
     pub capture_check: Option<String>,
+
+    /// Capture on an interval and print one `ProbeSample` JSON line per sample
+    #[arg(long, conflicts_with = "capture_check")]
+    pub probe: bool,
+
+    /// Time between probe captures [default: `stale.check_interval_seconds`]
+    #[arg(long, value_name = "DURATION", value_parser = parse_duration, requires = "probe")]
+    pub interval: Option<Duration>,
+
+    /// Stop the probe after this many samples [default: run until SIGTERM/SIGINT]
+    #[arg(long, value_name = "N", requires = "probe")]
+    pub count: Option<NonZeroUsize>,
+}
+
+fn parse_duration(text: &str) -> Result<Duration, String> {
+    let parsed = humantime::parse_duration(text).map_err(|err| err.to_string())?;
+    (parsed > Duration::ZERO)
+        .then_some(parsed)
+        .ok_or_else(|| "duration must be greater than zero".to_owned())
 }
 
 impl Args {
@@ -40,7 +61,9 @@ impl Args {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroUsize;
     use std::path::Path;
+    use std::time::Duration;
 
     use clap::CommandFactory;
     use clap::error::ErrorKind;
@@ -60,6 +83,9 @@ mod tests {
                 config: None,
                 log_level: None,
                 capture_check: None,
+                probe: false,
+                interval: None,
+                count: None,
             }
         );
         assert_eq!(args.config_path(), paths::config_file());
@@ -94,6 +120,20 @@ mod tests {
         assert_eq!(args.capture_check.as_deref(), Some("HDMI-A-1"));
         let err = parse(&["--capture-check"]).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn probe_takes_interval_and_count() {
+        let args = parse(&["--probe", "--interval", "5s", "--count", "3"]).unwrap();
+        assert!(args.probe);
+        assert_eq!(args.interval, Some(Duration::from_secs(5)));
+        assert_eq!(args.count, NonZeroUsize::new(3));
+        let err = parse(&["--interval", "5s"]).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+        let err = parse(&["--probe", "--interval", "0s"]).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+        let err = parse(&["--probe", "--capture-check", "HDMI-A-1"]).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::ArgumentConflict);
     }
 
     #[test]

@@ -16,6 +16,7 @@ pub mod idle;
 pub mod media;
 pub mod outputs;
 pub mod overlay;
+pub mod probe;
 pub mod process;
 pub mod prompt;
 pub mod service;
@@ -47,6 +48,9 @@ pub async fn run(args: Args) -> anyhow::Result<()> {
     )?;
     if let Some(output) = &args.capture_check {
         return capture::kwin::run_check(output).await;
+    }
+    if args.probe {
+        return probe::run_cli(&args).await;
     }
     let config = args.config_path()?;
     let mut signals = Signals::install().context("can't install signal handlers")?;

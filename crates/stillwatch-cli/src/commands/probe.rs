@@ -103,7 +103,12 @@ async fn stream(
     }
 }
 
-fn write_sample(
+/// Writes one sample as JSON or through [`render::probe`].
+///
+/// # Errors
+///
+/// Encoding the sample or writing to `out` fails.
+pub(crate) fn write_sample(
     sample: &ProbeSample,
     json: bool,
     style: &Style,

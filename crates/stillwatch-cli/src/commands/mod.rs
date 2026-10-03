@@ -7,20 +7,39 @@ pub mod diagnostics;
 pub mod history;
 pub mod idle_test;
 pub mod probe;
+pub mod probe_standalone;
 pub mod reload;
 pub mod status;
 
+use std::future::Future;
 use std::io::Write;
 
-use crate::args::{Cli, Command, ConfigCommand, IdleTestArgs};
+use anyhow::Context as _;
+
+use crate::args::{Cli, Command, ConfigCommand, IdleTestArgs, ProbeArgs};
 use crate::render::Style;
 use daemon::Request;
+
+/// A current-thread tokio runtime for commands that need one.
+///
+/// # Errors
+///
+/// The runtime can't start, or `fut` fails.
+pub(crate) fn block_on<T>(fut: impl Future<Output = anyhow::Result<T>>) -> anyhow::Result<T> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("can't start the async runtime")?
+        .block_on(fut)
+}
 
 /// Where a command runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Route<'a> {
     /// Answered by the daemon over D-Bus.
     Daemon(Request<'a>),
+    /// `stillwatch probe --standalone`, which spawns `stillwatchd --probe`.
+    Standalone(&'a ProbeArgs),
     /// `stillwatch idle-test`, which runs the idle sources locally.
     IdleTest(&'a IdleTestArgs),
     /// `stillwatch config`, which works on the file directly.
@@ -38,6 +57,7 @@ pub const fn route(command: &Command) -> Route<'_> {
         Command::Resume => Route::Daemon(Request::Resume),
         Command::Reload => Route::Daemon(Request::Reload),
         Command::History(args) => Route::Daemon(Request::History(args)),
+        Command::Probe(args) if args.standalone => Route::Standalone(args),
         Command::Probe(args) => Route::Daemon(Request::Probe(args)),
         Command::IdleTest(args) => Route::IdleTest(args),
         Command::Config { command } => Route::Config(command),
@@ -52,6 +72,9 @@ pub const fn route(command: &Command) -> Route<'_> {
 pub fn dispatch(cli: &Cli, style: &Style, out: &mut dyn Write) -> anyhow::Result<()> {
     match route(&cli.command) {
         Route::Daemon(request) => daemon::run(request, cli.bus_address.as_deref(), style, out),
+        Route::Standalone(args) => {
+            probe_standalone::run(args, cli.log_level.as_deref(), style, out)
+        }
         Route::IdleTest(args) => diagnostics::idle_test(args),
         Route::Config(ConfigCommand::Init(args)) => config::init(args, out),
         Route::Config(ConfigCommand::Check(args)) => config::check(args, out),
@@ -84,6 +107,10 @@ mod tests {
             let cli = cli(args);
             assert!(matches!(route(&cli.command), Route::Daemon(_)), "{args:?}");
         }
+        assert!(matches!(
+            route(&cli(&["probe", "--standalone"]).command),
+            Route::Standalone(_)
+        ));
         assert!(matches!(
             route(&cli(&["idle-test"]).command),
             Route::IdleTest(_)

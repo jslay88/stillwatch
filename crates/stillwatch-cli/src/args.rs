@@ -98,6 +98,10 @@ pub struct ProbeArgs {
     /// Print each sample as a JSON line
     #[arg(long)]
     pub json: bool,
+
+    /// Capture via `stillwatchd --probe` instead of the running daemon
+    #[arg(long)]
+    pub standalone: bool,
 }
 
 /// Arguments for `stillwatch idle-test`.

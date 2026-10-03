@@ -1486,6 +1486,7 @@ dependencies = [
  "ddc-i2c",
  "evdev",
  "futures-util",
+ "humantime",
  "jiff",
  "notify",
  "proptest",
