@@ -5,6 +5,7 @@
 //! parsing, so everything here is unit-testable with fakes.
 
 pub mod backend;
+pub mod backoff;
 pub mod command;
 pub mod config;
 pub mod detector;
