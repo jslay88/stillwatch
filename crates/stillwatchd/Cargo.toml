@@ -16,6 +16,8 @@ fake = []
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+ddc.workspace = true
+ddc-i2c.workspace = true
 evdev.workspace = true
 futures-util.workspace = true
 jiff.workspace = true
