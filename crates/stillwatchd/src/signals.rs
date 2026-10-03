@@ -5,6 +5,8 @@ use std::io;
 
 use tokio::signal::unix::{self, SignalKind};
 
+use crate::config_watch::ReloadTrigger;
+
 /// A signal the daemon reacts to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Signal {
@@ -14,6 +16,18 @@ pub enum Signal {
     Interrupt,
     /// SIGHUP: reload the config (systemd's `ExecReload`).
     Hangup,
+}
+
+impl Signal {
+    /// The config reload this signal asks for: [`ReloadTrigger::Hangup`]
+    /// for SIGHUP, `None` for the stop signals.
+    #[must_use]
+    pub const fn reload_trigger(self) -> Option<ReloadTrigger> {
+        match self {
+            Self::Hangup => Some(ReloadTrigger::Hangup),
+            Self::Terminate | Self::Interrupt => None,
+        }
+    }
 }
 
 /// Something that yields signals; `None` means no more will arrive.
@@ -113,6 +127,13 @@ mod tests {
             shutdown_after(&[Signal::Hangup, Signal::Hangup, Signal::Interrupt]).await,
             (Signal::Interrupt, 0)
         );
+    }
+
+    #[test]
+    fn only_hangup_asks_for_a_reload() {
+        assert_eq!(Signal::Hangup.reload_trigger(), Some(ReloadTrigger::Hangup));
+        assert_eq!(Signal::Terminate.reload_trigger(), None);
+        assert_eq!(Signal::Interrupt.reload_trigger(), None);
     }
 
     #[tokio::test]

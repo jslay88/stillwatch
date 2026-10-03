@@ -21,6 +21,7 @@ ddc-i2c.workspace = true
 evdev.workspace = true
 futures-util.workspace = true
 jiff.workspace = true
+notify.workspace = true
 smithay-client-toolkit.workspace = true
 stillwatch-core.workspace = true
 stillwatch-ipc.workspace = true
@@ -35,6 +36,7 @@ zbus.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+rustix.workspace = true
 stillwatch-core = { workspace = true, features = ["mocks"] }
 stillwatch-testkit.workspace = true
 stillwatchd = { path = ".", features = ["fake"] }
