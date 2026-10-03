@@ -8,7 +8,9 @@ all-features = false
 unmaintained = "all"
 unsound = "all"
 yanked = "deny"
-ignore = []
+ignore = [
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser via iced 0.14 cosmic-text; no upgrade exists" },
+]
 
 [licenses]
 # Permissive licenses plus LGPL. Anything else needs an explicit exception.
@@ -31,7 +33,9 @@ allow = [
 confidence-threshold = 0.8
 # The allowlist is a policy, not an inventory of what is in the tree today.
 unused-allowed-license = "allow"
-exceptions = []
+exceptions = [
+    { crate = "ksni", allow = ["Unlicense"] },
+]
 
 [licenses.private]
 # Workspace crates are `publish = false`.

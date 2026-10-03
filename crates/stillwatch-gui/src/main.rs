@@ -1,11 +1,15 @@
-//! The Stillwatch tray, settings window, and prompt dialog.
+//! The `stillwatch-gui` binary: tray, settings window, and prompt mode.
 
-fn main() {}
+use std::process::ExitCode;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn main_runs() {
-        super::main();
+use clap::Parser as _;
+
+fn main() -> ExitCode {
+    match stillwatch_gui::run(&stillwatch_gui::Cli::parse()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("stillwatch-gui: {err}");
+            ExitCode::FAILURE
+        }
     }
 }
