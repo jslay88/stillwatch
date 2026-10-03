@@ -249,21 +249,23 @@ async fn losing_the_bus_fails_the_prompt() -> TestResult {
 
 #[tokio::test]
 async fn dropping_show_closes_the_prompt() -> TestResult {
-    let Some(s) = Setup::start().await? else {
+    let Some(s) = Setup::with_prompter(|address| {
+        NotificationPrompter::at_address(address, PromptUrgency::Critical).with_tick(TICK)
+    })
+    .await?
+    else {
         return Ok(());
     };
-    let (task, first) = s.shown().await?;
-    // The countdown tick means `show` got past `Notify` and is tracking an id.
+    let (task, sent) = s.shown().await?;
+    // A countdown replace means `show` is past `Notify` and tracking this id.
     // Aborting in the gap after the server records `Notify` drops the call
-    // before that id exists, so nothing is closed.
-    let sent = s.notified(2).await?;
-    let current = sent.last().expect("replacement").id;
+    // before that id is tracked, so nothing is closed.
+    let _replaced = s.notified(2).await?;
     task.abort();
-    wait_until(|| s.server.close_calls().contains(&current).then_some(())).await?;
+    wait_until(|| s.server.close_calls().contains(&sent.id).then_some(())).await?;
     assert_eq!(s.server.open_ids(), Vec::<u32>::new());
     s.prompter.dismiss().await?;
-    assert!(s.server.close_calls().contains(&first.id));
-    assert!(s.server.close_calls().contains(&current));
+    assert_eq!(s.server.close_calls(), [sent.id]);
     Ok(())
 }
 
