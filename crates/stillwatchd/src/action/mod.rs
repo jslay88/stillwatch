@@ -1,3 +1,4 @@
-//! Blank methods: ways to turn displays off and back on.
+//! What Stillwatch does once the prompt times out: blank methods and hooks.
 
 pub mod ddc;
+pub mod dpms;

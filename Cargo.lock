@@ -1366,6 +1366,7 @@ dependencies = [
  "futures-util",
  "jiff",
  "proptest",
+ "rustix",
  "stillwatch-core",
  "stillwatch-ipc",
  "stillwatch-testkit",
@@ -1378,6 +1379,7 @@ dependencies = [
  "tracing-subscriber",
  "wayland-client",
  "wayland-protocols",
+ "wayland-protocols-plasma",
  "zbus",
 ]
 
@@ -1813,6 +1815,19 @@ dependencies = [
  "bitflags 2.13.2",
  "wayland-backend",
  "wayland-client",
+ "wayland-scanner",
+]
+
+[[package]]
+name = "wayland-protocols-plasma"
+version = "0.3.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b6d8cf1eb2c1c31ed1f5643c88a6e53538129d4af80030c8cabd1f9fa884d91"
+dependencies = [
+ "bitflags 2.13.2",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
  "wayland-scanner",
 ]
 

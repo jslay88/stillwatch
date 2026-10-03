@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use compositor::{FakeCompositor, Notification};
+use compositor::{FakeCompositor, IdleCompositor as _, Notification};
 use stillwatch_core::backend::{BackendError, IdleSource};
 use stillwatch_core::backoff::{Backoff, BackoffPolicy};
 use stillwatch_core::event::{ActivityEvent, Event};
