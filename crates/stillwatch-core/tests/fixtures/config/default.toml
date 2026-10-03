@@ -1,0 +1,77 @@
+version = 1                       # config schema version, used for automatic migrations
+
+[idle]
+input_idle_minutes = 10
+
+[session]
+when_locked = "blank_after"       # pause | blank_after
+locked_blank_seconds = 60
+
+[activity]
+gamepad = true
+gamepad_deadzone_percent = 15     # stick movement below this is ignored (stick drift)
+gamepad_ignore_devices = []       # name substrings, e.g. drifting pads, sim rigs that always report
+gamepad_wakes_display = true
+
+[capture]
+backend = "auto"                  # auto | kwin | portal
+
+[stale]
+check_interval_seconds = 60
+persist_checks = 5                # captures a block must stay unchanged to count as persistent
+stale_percent = 70                # 1-100; % of counted blocks that must be persistent
+media_stale_percent = 90          # used while a non-ignored MPRIS player is Playing; 0 = disabled
+media_ignore_players = ["spotify"] # audio-only players that shouldn't raise the threshold
+luma_delta_threshold = 6          # 0-255
+ignore_dark_below = 16            # 0-255; dark blocks are excluded; 0 = disabled
+downscale_width = 480
+block_grid = [16, 16]
+monitored_outputs = []            # empty = all
+require = "all"                   # all | any
+ignore_regions = []               # [{ output = "HDMI-A-1", x = 0, y = 0, w = 200, h = 40 }]
+
+[safety]
+ceiling_enabled = true
+ceiling_minutes = 30
+ceiling_stale_percent = 98
+ceiling_during_pause = false
+
+[prompt]
+style = "auto"                    # auto | notification | dialog
+urgency = "critical"              # low | normal | critical
+fallback_to_dialog = true
+countdown_seconds = 60
+snooze_presets_minutes = [15, 60, 180]
+allow_custom = true
+custom_min_minutes = 1
+custom_max_minutes = 720
+snooze_cancelled_by_input = false
+
+[action]
+mode = "blank"                    # blank | lock_and_blank | dim_then_blank | command
+blank_method = "dpms"             # dpms | overlay | ddc_standby
+outputs = "monitored"             # monitored | all
+dim_method = "overlay"            # overlay | brightness (KDE)
+dim_percent = 20
+dim_seconds = 30
+command = ""
+on_blank_cmd = ""                 # e.g. a TV "screen off" utility
+on_resume_cmd = ""
+reblank_on_wake = true
+reblank_grace_seconds = 15
+reblank_max_attempts = 3          # 0 = unlimited
+reblank_fallback = "overlay"      # overlay | none
+
+[panel_care]
+enabled = true
+min_standby_minutes = 10          # standby this long resets screen-on time
+reminder_enabled = true
+reminder_hours = 4
+trigger_cmd = ""                  # runs at blank time when panel care is due
+
+[history]
+enabled = true
+max_entries = 1000                # stored in ~/.local/state/stillwatch/history.jsonl
+
+[logging]
+level = "info"

@@ -16,10 +16,14 @@ mocks = []
 [dependencies]
 jiff.workspace = true
 serde.workspace = true
+serde_path_to_error.workspace = true
 thiserror.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
+proptest.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

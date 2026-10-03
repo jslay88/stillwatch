@@ -1,0 +1,4 @@
+version = 2
+
+[idle]
+input_idle_minutes = 10

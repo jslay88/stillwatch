@@ -1,0 +1,5 @@
+# Only one section; everything else takes its default.
+[stale]
+stale_percent = 80
+monitored_outputs = ["HDMI-A-1"]
+ignore_regions = [{ output = "HDMI-A-1", x = 0, y = 0, w = 200, h = 40 }]
