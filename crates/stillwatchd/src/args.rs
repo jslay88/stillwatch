@@ -18,6 +18,11 @@ pub struct Args {
     /// Log level; beats `RUST_LOG` and the config's `logging.level`
     #[arg(long, value_name = "LEVEL", value_parser = PossibleValuesParser::new(LEVELS))]
     pub log_level: Option<String>,
+
+    /// Capture OUTPUT once with `KWin` `ScreenShot2`, print its size and
+    /// format, and exit (checks the `.desktop` authorization)
+    #[arg(long, value_name = "OUTPUT")]
+    pub capture_check: Option<String>,
 }
 
 impl Args {
@@ -53,7 +58,8 @@ mod tests {
             args,
             Args {
                 config: None,
-                log_level: None
+                log_level: None,
+                capture_check: None,
             }
         );
         assert_eq!(args.config_path(), paths::config_file());
@@ -79,6 +85,14 @@ mod tests {
     #[test]
     fn log_level_rejects_unknown_levels() {
         let err = parse(&["--log-level", "loud"]).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn capture_check_takes_an_output() {
+        let args = parse(&["--capture-check", "HDMI-A-1"]).unwrap();
+        assert_eq!(args.capture_check.as_deref(), Some("HDMI-A-1"));
+        let err = parse(&["--capture-check"]).unwrap_err();
         assert_eq!(err.kind(), ErrorKind::InvalidValue);
     }
 

@@ -33,7 +33,24 @@ Watching keyboard, mouse, and gamepads with a 1m idle timeout. Ctrl-C to stop.
 2026-10-02 20:42:51  active (keyboard/mouse)
 ```
 
-The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`) and `--log-level <LEVEL>`. The log level comes from `--log-level`, then `RUST_LOG`, then `info` (the config's `logging.level` will slot in before the default once the daemon loads its config). Under systemd it logs to the journal, otherwise to stderr.
+The daemon takes `--config <PATH>` (default `~/.config/stillwatch/config.toml`), `--log-level <LEVEL>`, and `--capture-check <OUTPUT>` (see below). The log level comes from `--log-level`, then `RUST_LOG`, then `info` (the config's `logging.level` will slot in before the default once the daemon loads its config). Under systemd it logs to the journal, otherwise to stderr.
+
+## Screen capture on KDE
+
+On KDE, Stillwatch captures the screen through KWin's `org.kde.KWin.ScreenShot2` D-Bus interface. There's no screen-sharing indicator or prompt, but KWin only answers programs it has authorized, and that's done with a `.desktop` file:
+
+- Install [`packaging/io.github.jslay88.Stillwatch.Daemon.desktop`](packaging/io.github.jslay88.Stillwatch.Daemon.desktop) into `~/.local/share/applications/` (just you) or `/usr/share/applications/` (system wide). Any `applications/` directory under `$XDG_DATA_HOME` or `$XDG_DATA_DIRS` works.
+- `Exec=` has to be the absolute path of the `stillwatchd` that runs. The shipped file says `/usr/bin/stillwatchd`; if yours lives somewhere else (`~/.cargo/bin/stillwatchd`, a build directory), edit `Exec=` to that full path. `~` and bare command names don't work.
+- `X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2` is the line that grants access. The file name doesn't matter, and `NoDisplay=true` keeps it out of menus.
+
+How KWin matches it: it reads the caller's `/proc/<pid>/exe`, then looks for an installed application whose first `Exec=` word resolves (following symlinks) to exactly that path. Arguments after the path are ignored. A copy of the binary somewhere else doesn't match.
+
+Things that trip it up:
+
+- KWin notices new and removed `.desktop` files right away, but not edits to an existing one. After editing, remove and re-add the file, or `touch ~/.local/share/applications`.
+- If the `stillwatchd` binary is replaced while it's running (an upgrade or a rebuild), KWin sees `/proc/<pid>/exe` as `... (deleted)` and refuses it. Restart the daemon.
+
+To check it, `stillwatchd --capture-check HDMI-A-1` captures that output once and prints only its size, format, and the luma grid it was downscaled to, or the error with what to fix. The daemon also checks once at startup and logs the result. Without authorization it keeps running on input idle alone.
 
 ## Development
 

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Stillwatch daemon
+Comment=OLED burn-in protection service
+Exec=/usr/bin/stillwatchd
+Terminal=false
+NoDisplay=true
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
