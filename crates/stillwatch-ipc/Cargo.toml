@@ -1,0 +1,15 @@
+[package]
+name = "stillwatch-ipc"
+description = "D-Bus interface definitions and wire types shared by the Stillwatch daemon, CLI, and GUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
