@@ -151,12 +151,54 @@ fn hat_only_device_without_buttons_is_rejected() {
 }
 
 #[test]
-fn buttons_without_axes_are_rejected() {
+fn buttonless_pedals_and_rudders_are_accepted() {
+    for axis in [
+        Abs::ABS_X,
+        Abs::ABS_Y,
+        Abs::ABS_Z,
+        Abs::ABS_RX,
+        Abs::ABS_RY,
+        Abs::ABS_RZ,
+        Abs::ABS_THROTTLE,
+        Abs::ABS_RUDDER,
+        Abs::ABS_WHEEL,
+        Abs::ABS_GAS,
+        Abs::ABS_BRAKE,
+    ] {
+        assert_eq!(check([], axes(&[axis])), Verdict::Accept);
+    }
+}
+
+#[test]
+fn buttonless_hats_and_misc_are_rejected() {
+    assert_eq!(
+        check([], axes(&[Abs::ABS_HAT0X, Abs::ABS_HAT0Y, Abs::ABS_MISC])),
+        Verdict::Reject(Reason::NoButtons)
+    );
+    assert_eq!(
+        check([], [Abs::ABS_BRAKE.0 + 1]),
+        Verdict::Reject(Reason::NoButtons)
+    );
+}
+
+#[test]
+fn button_box_without_axes_is_accepted() {
+    assert_eq!(check(keys(&[Key::BTN_TRIGGER]), []), Verdict::Accept);
+    assert_eq!(check([0x13f], []), Verdict::Accept);
+}
+
+#[test]
+fn stream_controller_uinput_is_rejected() {
     // "stream-controller-os-plugin", a uinput device that declares every key.
-    let keys =
+    let codes =
         bitmap("fffffffffff ffffffffffffffff ffffffffffffffff ffffffffffffffff fffffffffffffffe");
-    assert!(keys.contains(&Key::BTN_TRIGGER.0));
-    assert_eq!(check(keys, []), Verdict::Reject(Reason::NoAxes));
+    assert!(codes.contains(&Key::BTN_TRIGGER.0));
+    assert!(codes.contains(&Key::KEY_A.0));
+    assert_eq!(check(codes, []), Verdict::Reject(Reason::NoAxes));
+    assert_eq!(
+        check(keys(&[Key::BTN_TRIGGER, Key::KEY_A]), []),
+        Verdict::Reject(Reason::NoAxes)
+    );
 }
 
 #[test]
