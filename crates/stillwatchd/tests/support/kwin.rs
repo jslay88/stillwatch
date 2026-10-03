@@ -101,7 +101,8 @@ impl Kwin {
         let deadline = Instant::now() + WAIT;
         while UnixStream::connect(self.socket_path()).is_err() {
             if let Some(status) = self.child.as_mut().unwrap().try_wait().unwrap() {
-                panic!("kwin_wayland exited before listening: {status}");
+                let log = std::fs::read_to_string(self.runtime.path().join(LOG));
+                panic!("kwin_wayland exited before listening: {status}\n{log:?}");
             }
             assert!(Instant::now() < deadline, "kwin_wayland didn't start");
             std::thread::sleep(Duration::from_millis(50));
