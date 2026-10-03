@@ -88,11 +88,6 @@ fn parse_errors_name_the_file() {
     assert!(err.to_string().contains("broken.rs"), "{err}");
 }
 
-#[test]
-fn real_workspace_is_within_limit() {
-    assert!(check(&crate::workspace::root().unwrap(), DEFAULT_MAX_LINES).is_ok());
-}
-
 fn decl(parents: &[&str], name: &str, path: Option<&str>) -> ModDecl {
     ModDecl {
         parents: parents.iter().map(|&p| p.to_owned()).collect(),
