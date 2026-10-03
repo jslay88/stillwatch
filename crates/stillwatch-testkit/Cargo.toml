@@ -1,6 +1,6 @@
 [package]
 name = "stillwatch-testkit"
-description = "Test helpers for Stillwatch backends: a private D-Bus session bus and fake services on it"
+description = "Test helpers for Stillwatch backends: a private D-Bus session bus, fake services on it, and headless KWin"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,11 +10,12 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+rustix.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
-zbus.workspace = true
-
-[dev-dependencies]
 tokio.workspace = true
+wayland-client.workspace = true
+zbus.workspace = true
 
 [lints]
 workspace = true

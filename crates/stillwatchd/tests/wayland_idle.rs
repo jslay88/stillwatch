@@ -1,19 +1,15 @@
-//! `WaylandIdleSource` against whatever compositor `WAYLAND_DISPLAY` points
-//! at (the desktop, or `kwin_wayland --virtual` in CI). Without one, only the
-//! "no compositor" path is checked.
+//! `WaylandIdleSource` against a headless `kwin_wayland --virtual`. Nothing
+//! sends input to it, so input idle fires as soon as the timeout passes.
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use stillwatch_core::backend::{EventSink, IdleSource};
+use stillwatch_core::backend::{BackendError, EventSink, IdleSource};
 use stillwatch_core::event::{ActivityEvent, Event};
+use stillwatch_testkit::kwin::{Kwin, KwinOptions};
 use stillwatchd::idle::WaylandIdleSource;
 use tokio::sync::mpsc;
-use tokio::time::timeout;
-
-fn compositor() -> bool {
-    std::env::var_os("WAYLAND_DISPLAY").is_some()
-}
+use tokio::time::{Instant, timeout};
 
 fn channel_sink() -> (Arc<dyn EventSink>, mpsc::UnboundedReceiver<Event>) {
     let (tx, rx) = mpsc::unbounded_channel();
@@ -23,33 +19,40 @@ fn channel_sink() -> (Arc<dyn EventSink>, mpsc::UnboundedReceiver<Event>) {
     (Arc::new(sink), rx)
 }
 
+fn source(kwin: &Kwin) -> WaylandIdleSource {
+    let connect = kwin.connector();
+    WaylandIdleSource::with_connector(move || {
+        connect().map_err(|err| BackendError::Disconnected(err.to_string()))
+    })
+}
+
 #[tokio::test]
-async fn binds_input_idle_or_reports_no_compositor() {
-    let source = WaylandIdleSource::default();
-    let (sink, _rx) = channel_sink();
+async fn binds_input_idle_and_keeps_watching() {
+    let Some(kwin) = Kwin::start(KwinOptions::default()).await.unwrap() else {
+        return;
+    };
+    let source = source(&kwin);
+    let (sink, mut rx) = channel_sink();
     let watching = timeout(
         Duration::from_millis(500),
         source.watch(Duration::from_secs(600), sink),
     )
     .await;
-    if compositor() {
-        assert!(watching.is_err(), "watch ended early: {watching:?}");
-    } else {
-        let error = watching.unwrap().unwrap_err();
-        assert!(error.is_transient(), "{error}");
-    }
+    assert!(watching.is_err(), "watch ended early: {watching:?}");
+    assert!(rx.try_recv().is_err(), "nothing should fire before 600 s");
 }
 
 #[tokio::test]
-async fn short_timeout_reports_input_idle() {
-    if !compositor() {
-        eprintln!("skipping: WAYLAND_DISPLAY is unset");
+async fn input_idle_fires_after_the_timeout_without_input() {
+    let Some(kwin) = Kwin::start(KwinOptions::default()).await.unwrap() else {
         return;
-    }
-    let source = WaylandIdleSource::default();
+    };
+    let source = source(&kwin);
     let (sink, mut rx) = channel_sink();
-    let watching = source.watch(Duration::from_millis(50), sink);
-    let first = timeout(Duration::from_secs(10), async {
+    let idle_after = Duration::from_secs(2);
+    let started = Instant::now();
+    let watching = source.watch(idle_after, sink);
+    let first = timeout(Duration::from_secs(15), async {
         tokio::select! {
             result = watching => panic!("watch ended: {result:?}"),
             event = rx.recv() => event,
@@ -57,5 +60,34 @@ async fn short_timeout_reports_input_idle() {
     })
     .await
     .unwrap();
+    let waited = started.elapsed();
     assert_eq!(first, Some(ActivityEvent::InputIdle.into()));
+    assert!(
+        waited >= Duration::from_millis(1900),
+        "idle after {waited:?}"
+    );
+}
+
+#[tokio::test]
+async fn losing_kwin_is_a_transient_error() {
+    let Some(kwin) = Kwin::start(KwinOptions::default()).await.unwrap() else {
+        return;
+    };
+    let source = source(&kwin);
+    let (sink, _rx) = channel_sink();
+    let watching = source.watch(Duration::from_secs(600), sink);
+    tokio::pin!(watching);
+    assert!(
+        timeout(Duration::from_millis(300), &mut watching)
+            .await
+            .is_err()
+    );
+    drop(kwin);
+    let error = timeout(Duration::from_secs(10), watching)
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert!(error.is_transient(), "{error}");
+    let reconnect = source.watch(Duration::from_secs(600), channel_sink().0);
+    assert!(reconnect.await.unwrap_err().is_transient());
 }

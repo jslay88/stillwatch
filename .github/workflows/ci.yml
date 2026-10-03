@@ -59,10 +59,16 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    container: archlinux:latest
+    container:
+      image: archlinux:latest
+      # kwin_wayland has the cap_sys_nice file capability; exec fails with EPERM
+      # when the container's bounding set lacks it.
+      options: --cap-add=SYS_NICE
     env:
       # Private-bus D-Bus tests fail instead of skipping when dbus-daemon is missing.
       STILLWATCH_REQUIRE_DBUS: "1"
+      # Same for the headless kwin_wayland --virtual tests.
+      STILLWATCH_REQUIRE_KWIN: "1"
     steps:
       - name: Install git
         run: pacman -Syu --noconfirm --needed git

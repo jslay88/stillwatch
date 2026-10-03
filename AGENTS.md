@@ -19,6 +19,7 @@ Stillwatch protects OLED panels from burn-in on Linux Wayland. It watches for re
 | `crates/stillwatchd` | The daemon. Backends (`idle/`, `gamepad/`, `media/`, `capture/`, `action/`, `overlay/`, `prompt/`, `session/`), the D-Bus service, platform detection. |
 | `crates/stillwatch-cli` | The `stillwatch` binary: `status`, `snooze`, `pause`, `resume`, `reload`, `probe`, `idle-test`, `config init/check`, `history`. |
 | `crates/stillwatch-gui` | The `stillwatch-gui` binary (iced): tray, schema-driven settings window, prompt dialog, calibration heatmap, History page. |
+| `crates/stillwatch-testkit` | Dev-only test helpers: private D-Bus bus, fake services on it, headless KWin harness. |
 | `xtask` | Repo automation and quality gates (`cargo xtask ...`). |
 | `packaging/` | systemd user unit, `.desktop` files, example display hooks, PKGBUILD. |
 
@@ -44,6 +45,18 @@ Toolchain comes from asdf via `.tool-versions` (Rust and Node, the latter for `j
 | `cargo xtask check-size` | 400-line limit per `.rs` file, excluding `#[cfg(test)]` modules. |
 | `cargo xtask coverage` | `cargo llvm-cov` with the thresholds (workspace >= 80%, `stillwatch-core` >= 90%). |
 | `cargo xtask gen-docs` | Regenerates `docs/config.md` from the settings schema. Run it after changing any setting; `--check` only verifies. |
+
+### Integration tests
+
+Backend integration tests live in each crate's `tests/` and use the dev-only `crates/stillwatch-testkit`. They run as part of `cargo xtask coverage` (and so `cargo xtask ci`), and count toward coverage.
+
+- `PrivateBus::start()`: a throwaway `dbus-daemon --session`. Fake services (MPRIS players, ...) go next to it in the testkit.
+- `kwin::Kwin::start(KwinOptions { width, height, outputs, authorize, .. })`: a headless `kwin_wayland --virtual` on its own private bus, in a temp sandbox (home, `XDG_RUNTIME_DIR`, XDG dirs). Use `connect()`/`connector()` for Wayland, `bus()` for D-Bus, and `command(program)` to run a client process with the sandbox's environment. `authorize` installs `.desktop` grants (e.g. `Authorization::current_exe(&[SCREENSHOT2])`) before KWin starts. Everything is killed on drop, including on panic.
+- Never point a test at the desktop session: don't read `WAYLAND_DISPLAY` or the session bus, always go through the testkit.
+- When `dbus-daemon` or `kwin_wayland` isn't installed, `start` returns `Ok(None)` and the test returns early with a "skipping" message. `STILLWATCH_REQUIRE_DBUS=1` and `STILLWATCH_REQUIRE_KWIN=1` turn that into a failure. CI sets both, so a skip there is a red build.
+- Run just these with `cargo nextest run -p stillwatch-testkit -p stillwatchd`, or one file with `--test wayland_idle`. Locally `cargo xtask ci` uses your installed KWin; it never touches the running session.
+- New test binaries that start KWin go in the filter in `.config/nextest.toml`, so their output (the "kwin_wayland ready" line) shows in CI logs even when they pass.
+- CI runs on GitHub's runners with no render node, so KWin composites with QPainter there. ScreenShot2 authorizes callers but answers "Screenshot got cancelled" without OpenGL; locally (with a GPU) it returns frames.
 
 ## Linear workflow
 

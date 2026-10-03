@@ -1,0 +1,6 @@
+# Tests against headless KWin show their output even when they pass, so a CI
+# log shows KWin actually started rather than the test skipping. Add new KWin
+# test binaries here.
+[[profile.default.overrides]]
+filter = 'binary(kwin) | binary(wayland_idle) | binary(dpms_kwin) | binary(kwin_screenshot)'
+success-output = "final"

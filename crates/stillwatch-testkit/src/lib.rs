@@ -10,9 +10,13 @@
 //! `Ok(None)` and the test should return early, unless
 //! `STILLWATCH_REQUIRE_DBUS=1` is set (as in CI), which turns that into an
 //! error.
+//!
+//! [`kwin::Kwin`] does the same for a headless `kwin_wayland --virtual` on
+//! its own private bus, with `STILLWATCH_REQUIRE_KWIN=1`.
 
 mod bus;
 mod error;
+pub mod kwin;
 pub mod logind;
 pub mod mpris;
 pub mod notifications;

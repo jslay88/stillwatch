@@ -68,12 +68,23 @@ Individual gates: `cargo xtask gate <fmt|clippy|size|jscpd|deny|machete|coverage
 - `cargo xtask coverage` runs the tests under `cargo llvm-cov nextest` and requires 80% line coverage for the workspace and 90% for `stillwatch-core`. Binary `main.rs` files and `xtask` are excluded. The lcov report lands in `target/coverage/lcov.info`.
 - `jscpd` uses `.jscpd.json` (50 token minimum, tests excluded, any clone fails). `cargo deny` uses `deny.toml`.
 
+### Integration tests
+
+Backend tests run against a real D-Bus and a real compositor, both started per test by `stillwatch-testkit`: a private `dbus-daemon`, and a headless `kwin_wayland --virtual` in a throwaway sandbox (own `XDG_RUNTIME_DIR`, home, and session bus). They never touch your desktop session, so they're safe to run inside Plasma. They need `dbus` and `kwin` installed and run with the rest under `cargo xtask coverage` / `cargo xtask ci`.
+
+If either is missing the tests skip with a message. Set `STILLWATCH_REQUIRE_DBUS=1` and `STILLWATCH_REQUIRE_KWIN=1` to make that a failure instead (CI does).
+
+```sh
+cargo nextest run -p stillwatch-testkit -p stillwatchd   # just the crates with integration tests
+STILLWATCH_REQUIRE_KWIN=1 cargo nextest run --test wayland_idle
+```
+
 ### CI
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on every PR, in an `archlinux:latest` container with the Rust version from `.tool-versions`. Both jobs call the same `cargo xtask` subcommands as above.
 
 - **lint**: fmt, clippy, check-size, jscpd, cargo deny, cargo machete, and building the benches. Every gate runs even if an earlier one failed, so one push shows all of them.
-- **test**: `cargo xtask coverage`. The lcov report is uploaded as the `lcov` artifact.
+- **test**: `cargo xtask coverage`, unit and integration tests together, with `STILLWATCH_REQUIRE_DBUS=1` and `STILLWATCH_REQUIRE_KWIN=1`. The lcov report is uploaded as the `lcov` artifact.
 
 ## License
 

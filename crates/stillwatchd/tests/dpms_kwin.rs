@@ -1,100 +1,76 @@
-//! `DpmsBlanker` against a private headless `KWin` (`kwin_wayland --virtual`
-//! with two outputs, on its own D-Bus session). It never talks to the
-//! desktop's compositor: both the watch and kscreen-doctor get the private
-//! socket explicitly.
-//!
-//! Skipped when `kwin_wayland`, `kscreen-doctor`, or `dbus-run-session` is
-//! missing, unless `STILLWATCH_REQUIRE_KWIN=1`. The launch code here is the
-//! minimum this test needs; the shared headless `KWin` harness replaces it.
+//! `DpmsBlanker` against a private headless `KWin` from
+//! [`stillwatch_testkit::kwin`]. Both the watch and kscreen-doctor talk to
+//! that compositor, never the desktop.
 
-use std::os::unix::process::CommandExt as _;
-use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use rustix::process::{Pid, Signal, kill_process_group};
-use stillwatch_core::backend::{Blanker, EventSink};
+use stillwatch_core::backend::{BackendError, Blanker, EventSink};
 use stillwatch_core::event::Event;
+use stillwatch_testkit::kwin::{Kwin, KwinOptions};
 use stillwatchd::action::dpms::DpmsBlanker;
+use stillwatchd::process::{CommandResult, CommandRunner, CommandSpec, TokioRunner};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
 const OUTPUTS: [&str; 2] = ["Virtual-0", "Virtual-1"];
 const LIMIT: Duration = Duration::from_secs(15);
 
-/// A headless `KWin` in its own process group, killed with everything it
-/// started when dropped.
-struct HeadlessKwin {
-    child: Child,
-    socket: String,
+/// Runs kscreen-doctor with the harness environment so it finds the private
+/// socket and bus, not the desktop's.
+struct HarnessRunner {
+    extra: Vec<(String, String)>,
 }
 
-impl HeadlessKwin {
-    fn start() -> Option<Self> {
-        Self::start_numbered(0)
-    }
-
-    /// Starts `KWin` on a socket unique to this process and `n`, so tests can
-    /// run side by side.
-    fn start_numbered(n: u32) -> Option<Self> {
-        let required = std::env::var_os("STILLWATCH_REQUIRE_KWIN").is_some_and(|v| v == "1");
-        let missing: Vec<_> = ["kwin_wayland", "kscreen-doctor", "dbus-run-session"]
-            .into_iter()
-            .filter(|tool| !on_path(tool))
-            .collect();
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR");
-        if !missing.is_empty() || runtime.is_none() {
-            assert!(
-                !required,
-                "STILLWATCH_REQUIRE_KWIN=1 but {missing:?} not found or XDG_RUNTIME_DIR unset"
-            );
-            eprintln!("skipping: {missing:?} not found or XDG_RUNTIME_DIR unset");
-            return None;
-        }
-
-        let socket = format!("stillwatch-test-{}-{n}", std::process::id());
-        let path = PathBuf::from(runtime?).join(&socket);
-        let spawned = Command::new("dbus-run-session")
-            .args(["--", "kwin_wayland", "--virtual", "--no-lockscreen"])
-            .args(["--output-count", "2", "--width", "1280", "--height", "720"])
-            .args(["--socket", &socket])
-            .env_remove("DISPLAY")
-            .env_remove("WAYLAND_DISPLAY")
-            .env_remove("WAYLAND_SOCKET")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .process_group(0)
-            .spawn();
-        assert!(spawned.is_ok(), "can't start kwin_wayland: {spawned:?}");
-        let kwin = Self {
-            child: spawned.ok()?,
-            socket,
-        };
-        let started = Instant::now();
-        while !path.exists() {
-            assert!(
-                started.elapsed() < LIMIT,
-                "kwin_wayland never opened {}",
-                path.display()
-            );
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        Some(kwin)
-    }
-}
-
-impl Drop for HeadlessKwin {
-    fn drop(&mut self) {
-        let _ = kill_process_group(Pid::from_child(&self.child), Signal::TERM);
-        let _ = self.child.wait();
+impl CommandRunner for HarnessRunner {
+    fn run<'a>(
+        &'a self,
+        spec: &'a CommandSpec,
+    ) -> stillwatch_core::backend::BoxFuture<'a, CommandResult> {
+        Box::pin(async move {
+            let mut spec = spec.clone();
+            spec.env = self.extra.iter().cloned().chain(spec.env).collect();
+            TokioRunner.run(&spec).await
+        })
     }
 }
 
 fn on_path(tool: &str) -> bool {
     std::env::var_os("PATH")
         .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(tool).is_file()))
+}
+
+async fn start() -> Result<Option<Kwin>, stillwatch_testkit::Error> {
+    if !on_path("kscreen-doctor") {
+        assert!(
+            std::env::var_os("STILLWATCH_REQUIRE_KWIN").is_none_or(|v| v != "1"),
+            "STILLWATCH_REQUIRE_KWIN=1 but kscreen-doctor is not on PATH"
+        );
+        eprintln!("skipping: kscreen-doctor not found");
+        return Ok(None);
+    }
+    Kwin::start(KwinOptions {
+        outputs: 2,
+        width: 1280,
+        height: 720,
+        ..KwinOptions::default()
+    })
+    .await
+}
+
+fn blanker(kwin: &Kwin) -> DpmsBlanker {
+    let extra = kwin
+        .env()
+        .into_iter()
+        .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
+        .collect();
+    let connect = kwin.connector();
+    DpmsBlanker::new()
+        .on_display(kwin.socket_path().display().to_string())
+        .with_connector(move || {
+            connect().map_err(|err| BackendError::Disconnected(err.to_string()))
+        })
+        .with_runner(Arc::new(HarnessRunner { extra }))
 }
 
 fn channel_sink() -> (Arc<dyn EventSink>, mpsc::UnboundedReceiver<Event>) {
@@ -135,10 +111,10 @@ async fn states(rx: &mut mpsc::UnboundedReceiver<Event>, on: bool) -> Vec<Event>
 
 #[tokio::test]
 async fn dpms_off_and_on_is_reported_per_output() {
-    let Some(kwin) = HeadlessKwin::start() else {
+    let Some(kwin) = start().await.unwrap() else {
         return;
     };
-    let blanker = Arc::new(DpmsBlanker::new().on_display(&kwin.socket));
+    let blanker = Arc::new(blanker(&kwin));
     let (sink, mut rx) = channel_sink();
     let watching = {
         let blanker = Arc::clone(&blanker);
@@ -163,10 +139,10 @@ async fn dpms_off_and_on_is_reported_per_output() {
 
 #[tokio::test]
 async fn blanking_an_unknown_output_changes_nothing() {
-    let Some(kwin) = HeadlessKwin::start_numbered(1) else {
+    let Some(kwin) = start().await.unwrap() else {
         return;
     };
-    let blanker = DpmsBlanker::new().on_display(&kwin.socket);
+    let blanker = blanker(&kwin);
     let error = blanker.blank(&["HDMI-A-9".to_owned()]).await.unwrap_err();
     assert!(error.to_string().contains("HDMI-A-9"), "{error}");
     blanker.unblank(&["HDMI-A-9".to_owned()]).await.unwrap();

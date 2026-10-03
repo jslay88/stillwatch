@@ -1,105 +1,66 @@
-//! `KwinCapture` against a real headless `KWin` (`kwin_wayland --virtual`),
-//! including the `.desktop` authorization. Skipped unless the harness sets
-//! `STILLWATCH_KWIN_HARNESS=1`.
-//!
-//! What the harness has to provide:
-//!
-//! - `DBUS_SESSION_BUS_ADDRESS` and `WAYLAND_DISPLAY` for a private session
-//!   bus and a `kwin_wayland --virtual` running on it, with `OpenGL`
-//!   compositing (Mesa llvmpipe is fine). The `QPainter` backend can't take
-//!   screenshots and answers `Cancelled`.
-//! - `STILLWATCH_KWIN_APPLICATIONS_DIR`: an `applications/` directory `KWin`
-//!   searches for `.desktop` files and this test can write to, for example
-//!   `$XDG_DATA_HOME/applications` where `XDG_DATA_HOME` is the one `KWin`
-//!   was started with. Give `KWin` its own `XDG_CACHE_HOME` too, so its
-//!   `ksycoca6` cache isn't shared with the desktop.
-//! - Optionally `STILLWATCH_KWIN_OUTPUT_SIZE=WIDTHxHEIGHT`, the size `KWin`
-//!   was started with (`--width`/`--height`), checked against the capture.
-//!
-//! Authorization is per executable, and every test in this binary is the
-//! same executable, so both halves run in one test, in order.
+//! `KwinCapture` against the shared headless `KWin` harness, including
+//! `.desktop` authorization. In CI, `KWin` uses its software renderer and
+//! `ScreenShot2` answers `Cancelled` instead of a frame; the test still
+//! checks that an authorized caller is not refused.
 
-use std::io;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use stillwatch_core::backend::{BackendError, ScreenCapture as _};
-use stillwatchd::capture::kwin::{Capture, KwinCapture};
+use stillwatch_testkit::kwin::{Authorization, Kwin, KwinOptions, SCREENSHOT2};
+use stillwatchd::capture::kwin::KwinCapture;
+use stillwatchd::outputs;
 
-const AUTHORIZE_TIMEOUT: Duration = Duration::from_secs(15);
-
-/// Removes the test's `.desktop` file however the test ends.
-struct DesktopFile(PathBuf);
-
-impl DesktopFile {
-    fn install(dir: &Path) -> io::Result<Self> {
-        let exe = std::env::current_exe()?;
-        let path = dir.join(format!("stillwatch-test-{}.desktop", std::process::id()));
-        let contents = format!(
-            "[Desktop Entry]\nType=Application\nName=Stillwatch test\nExec=\"{}\"\n\
-             NoDisplay=true\nX-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2\n",
-            exe.display()
-        );
-        std::fs::write(&path, contents)?;
-        Ok(Self(path))
-    }
-}
-
-impl Drop for DesktopFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
-}
-
-fn expected_size() -> Option<(u32, u32)> {
-    let size = std::env::var("STILLWATCH_KWIN_OUTPUT_SIZE").ok()?;
-    let (width, height) = size.split_once('x')?;
-    Some((width.parse().ok()?, height.parse().ok()?))
-}
-
-/// `KWin` rebuilds its service cache when the applications directory
-/// changes, which can lag the write slightly.
-async fn capture_once_authorized(
-    capture: &KwinCapture,
-    output: &str,
-) -> Result<Capture, BackendError> {
-    let started = Instant::now();
-    loop {
-        match capture.capture(output, 480).await {
-            Err(BackendError::PermissionDenied(_)) if started.elapsed() < AUTHORIZE_TIMEOUT => {
-                tokio::time::sleep(Duration::from_millis(250)).await;
-            }
-            result => return result,
-        }
-    }
-}
+const NAME_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::test]
 async fn screenshot2_needs_the_desktop_file_and_returns_the_output_size() {
-    if std::env::var_os("STILLWATCH_KWIN_HARNESS").is_none() {
-        eprintln!("skipping: STILLWATCH_KWIN_HARNESS is unset");
+    let Some(denied) = Kwin::start(KwinOptions::default()).await.unwrap() else {
         return;
-    }
-    let applications = PathBuf::from(std::env::var_os("STILLWATCH_KWIN_APPLICATIONS_DIR").unwrap());
-    std::fs::create_dir_all(&applications).unwrap();
-
-    let capture = KwinCapture::connect().await.unwrap();
-    let outputs = capture.outputs().await.unwrap();
-    let output = outputs.first().unwrap().clone();
-    if let Some(size) = expected_size() {
-        assert_eq!((output.width, output.height), size, "{output:?}");
-    }
-
-    let err = capture.capture(&output.name, 480).await.unwrap_err();
-    assert!(matches!(err, BackendError::PermissionDenied(_)), "{err}");
-
-    let _desktop = DesktopFile::install(&applications).unwrap();
-    let result = capture_once_authorized(&capture, &output.name)
+    };
+    denied
+        .wait_for_name(SCREENSHOT2, NAME_TIMEOUT)
         .await
         .unwrap();
-    assert_eq!(
-        (result.meta.width, result.meta.height),
-        (output.width, output.height)
-    );
-    assert_eq!(result.grid.width(), output.width.min(480));
+    let bus = denied.bus().connect().await.unwrap();
+    let capture = KwinCapture::on(&bus).await.unwrap();
+    let err = capture.capture("Virtual-0", 480).await.unwrap_err();
+    assert!(matches!(err, BackendError::PermissionDenied(_)), "{err}");
+    drop(denied);
+
+    let Some(kwin) = Kwin::start(KwinOptions {
+        authorize: vec![Authorization::current_exe(&[SCREENSHOT2]).unwrap()],
+        ..KwinOptions::default()
+    })
+    .await
+    .unwrap() else {
+        return;
+    };
+    kwin.wait_for_name(SCREENSHOT2, NAME_TIMEOUT).await.unwrap();
+    let wayland = kwin.connect().unwrap();
+    let bus = kwin.bus().connect().await.unwrap();
+    let capture = KwinCapture::on(&bus).await.unwrap().with_outputs(move || {
+        let wayland = wayland.clone();
+        Box::pin(async move { outputs::list_on(&wayland).await })
+    });
+    let outputs = capture.outputs().await.unwrap();
+    let output = outputs.first().expect("Virtual-0");
+    assert_eq!(output.name, "Virtual-0");
+    assert_eq!((output.width, output.height), (1920, 1080));
+
+    match capture.capture(&output.name, 480).await {
+        Ok(result) => {
+            assert_eq!(
+                (result.meta.width, result.meta.height),
+                (output.width, output.height)
+            );
+            assert_eq!(result.grid.width(), output.width.min(480));
+        }
+        Err(error) => {
+            let text = error.to_string();
+            assert!(
+                text.contains("Cancelled") || text.contains("couldn't render"),
+                "authorized capture failed for a reason other than no GPU: {error}"
+            );
+        }
+    }
 }

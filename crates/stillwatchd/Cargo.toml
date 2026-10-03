@@ -34,7 +34,6 @@ zbus.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
-rustix.workspace = true
 stillwatch-core = { workspace = true, features = ["mocks"] }
 stillwatch-testkit.workspace = true
 stillwatchd = { path = ".", features = ["fake"] }

@@ -1349,8 +1349,11 @@ dependencies = [
 name = "stillwatch-testkit"
 version = "0.1.0"
 dependencies = [
+ "rustix",
+ "tempfile",
  "thiserror",
  "tokio",
+ "wayland-client",
  "zbus",
 ]
 
@@ -1366,7 +1369,6 @@ dependencies = [
  "futures-util",
  "jiff",
  "proptest",
- "rustix",
  "stillwatch-core",
  "stillwatch-ipc",
  "stillwatch-testkit",
