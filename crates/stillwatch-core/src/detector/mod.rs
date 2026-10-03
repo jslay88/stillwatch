@@ -15,9 +15,10 @@
 //! [`BlockDetector::set_outputs`]; see the `ignore` module for the exact rule.
 //! Until an output's size is known, its regions ignore nothing.
 //!
-//! The state machine feeds captures through [`StaleDetector`]:
-//! [`BlockDetector::observe`] reduces each [`CaptureFrame`] to block means
-//! and hands them to [`BlockDetector::observe_means`].
+//! The state machine feeds captures, reloads, and output changes through
+//! [`StaleDetector`]: [`BlockDetector::observe`] reduces each
+//! [`CaptureFrame`] to block means and hands them to
+//! [`BlockDetector::observe_means`].
 
 mod aggregate;
 mod ceiling;
@@ -29,7 +30,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use tracing::warn;
 
-use crate::config::{Config, SafetyConfig, StaleConfig};
+use crate::config::{CaptureBackend, Config, SafetyConfig, StaleConfig};
 use crate::event::CaptureFrame;
 use crate::luma::{self, OutputInfo};
 use crate::state::StaleDetector;
@@ -52,6 +53,7 @@ pub struct BlockMeans<'a> {
 /// Detects stale (burn-in risk) content from per-block persistence.
 #[derive(Debug, Clone)]
 pub struct BlockDetector {
+    backend: CaptureBackend,
     stale: StaleConfig,
     safety: SafetyConfig,
     rules: BlockRules,
@@ -65,6 +67,7 @@ impl BlockDetector {
     #[must_use]
     pub fn new(config: &Config) -> Self {
         Self {
+            backend: config.capture.backend,
             stale: config.stale.clone(),
             safety: config.safety.clone(),
             rules: BlockRules::from_config(&config.stale),
@@ -77,11 +80,14 @@ impl BlockDetector {
     /// Applies a reloaded config.
     ///
     /// Thresholds, deltas, and ignore regions apply from the next capture
-    /// without losing history. Changing `block_grid` or `monitored_outputs`
-    /// resets every block counter.
+    /// without losing history. Changing `capture.backend`, `block_grid`, or
+    /// `monitored_outputs` (the settings marked "resets detection") resets
+    /// every block counter. The order of `monitored_outputs` doesn't matter.
     pub fn apply_config(&mut self, config: &Config) {
-        let resets = self.stale.block_grid != config.stale.block_grid
+        let resets = self.backend != config.capture.backend
+            || self.stale.block_grid != config.stale.block_grid
             || sorted(&self.stale.monitored_outputs) != sorted(&config.stale.monitored_outputs);
+        self.backend = config.capture.backend;
         self.stale = config.stale.clone();
         self.safety = config.safety.clone();
         self.rules = BlockRules::from_config(&config.stale);
@@ -265,6 +271,14 @@ impl StaleDetector for BlockDetector {
 
     fn ceiling(&self) -> Option<DetectionStats> {
         Self::ceiling(self)
+    }
+
+    fn apply_config(&mut self, config: &Config) {
+        Self::apply_config(self, config);
+    }
+
+    fn set_outputs(&mut self, outputs: &[OutputInfo]) {
+        Self::set_outputs(self, outputs);
     }
 }
 

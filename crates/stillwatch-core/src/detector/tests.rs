@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{IgnoreRegion, StaleRequire};
+use crate::config::{CaptureBackend, IgnoreRegion, StaleRequire};
 use crate::stats::{Threshold, ThresholdReason};
 
 const STILL: f32 = 128.0;
@@ -377,6 +377,37 @@ fn set_outputs_drops_disconnected_outputs() {
     assert!(detector.blocks("DP-1").is_some());
     detector.set_outputs(&[OutputInfo::new("DP-2", 100, 100)]);
     assert_eq!(detector.blocks("DP-1"), None);
+}
+
+#[test]
+fn apply_config_resets_on_a_capture_backend_change() {
+    let mut config = config(2, 2);
+    let mut detector = BlockDetector::new(&config);
+    persisted(&mut detector);
+    detector.apply_config(&config);
+    assert!(detector.blocks("DP-1").is_some());
+
+    config.capture.backend = CaptureBackend::Portal;
+    detector.apply_config(&config);
+    assert_eq!(detector.blocks("DP-1"), None);
+    persisted(&mut detector);
+    detector.apply_config(&config);
+    assert!(detector.blocks("DP-1").is_some());
+}
+
+#[test]
+fn trait_apply_config_and_set_outputs_reach_the_detector() {
+    let mut regridded = detector(2, 2);
+    let mut unplugged = detector(2, 2);
+    persisted(&mut regridded);
+    persisted(&mut unplugged);
+
+    StaleDetector::apply_config(&mut regridded, &config(4, 4));
+    assert_eq!(regridded.grid(), [4, 4]);
+    assert_eq!(regridded.blocks("DP-1"), None);
+
+    StaleDetector::set_outputs(&mut unplugged, &[OutputInfo::new("DP-2", 100, 100)]);
+    assert_eq!(unplugged.blocks("DP-1"), None);
 }
 
 #[test]

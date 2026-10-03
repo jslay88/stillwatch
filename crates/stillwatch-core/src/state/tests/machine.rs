@@ -2,12 +2,13 @@
 
 use std::time::Duration;
 
-use super::records;
 use super::transitions::reach;
+use super::{config, records};
 use crate::command::Command;
 use crate::config::Config;
 use crate::event::{ControlCommand, Event, SessionEvent};
 use crate::history::HistoryKind;
+use crate::luma::OutputInfo;
 use crate::mocks::{Harness, Observation, ScriptedDetector};
 use crate::prompt::PromptOutcome;
 use crate::state::{State, StateMachine, StatusSnapshot};
@@ -111,6 +112,51 @@ fn reload_outside_capture_states_only_records() {
     assert_eq!(commands.len(), 1);
     assert_eq!(records(&commands)[0].kind, HistoryKind::ConfigReload);
     assert_eq!(h.send(Event::ConfigReloaded), vec![]);
+}
+
+#[test]
+fn reloads_reach_the_detector_in_every_state() {
+    let reloaded = config(|c| c.stale.stale_percent = 55);
+    for state in State::ALL {
+        let mut h = reach(state);
+        h.apply_config(&reloaded);
+        assert_eq!(h.detector().configs(), vec![reloaded.clone()], "{state}");
+    }
+}
+
+#[test]
+fn a_threshold_reload_keeps_the_counters() {
+    let mut h = reach(State::Monitoring);
+    let resets = h.detector().resets();
+    h.apply_config(&config(|c| c.stale.stale_percent = 55));
+    assert_eq!(h.detector().resets(), resets);
+    assert_eq!(h.state(), State::Monitoring);
+    h.advance(Duration::from_secs(60));
+    h.capture(true);
+    assert_eq!(h.state(), State::Prompting);
+}
+
+#[test]
+fn output_changes_reach_the_detector_in_every_state() {
+    let outputs = vec![OutputInfo::new("HDMI-A-1", 3840, 2160)];
+    for state in State::ALL {
+        let mut h = reach(state);
+        assert_eq!(h.send(Event::OutputsChanged(outputs.clone())), vec![]);
+        assert_eq!(h.state(), state);
+        assert_eq!(
+            h.detector().output_updates(),
+            vec![outputs.clone()],
+            "{state}"
+        );
+    }
+}
+
+#[test]
+fn output_changes_reach_the_detector_while_asleep() {
+    let mut h = reach(State::Blanked);
+    h.send(SessionEvent::PrepareForSleep);
+    assert_eq!(h.send(Event::OutputsChanged(vec![])), vec![]);
+    assert_eq!(h.detector().output_updates(), vec![vec![]]);
 }
 
 #[test]
