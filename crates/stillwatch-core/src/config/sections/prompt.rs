@@ -9,7 +9,8 @@ use crate::config::validate::Issues;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PromptStyle {
-    /// Notification normally, dialog when a notification wouldn't be seen.
+    /// Notification normally. Dialog during fullscreen only after it is
+    /// verified that notifications do not show over a fullscreen surface.
     #[default]
     Auto,
     /// Desktop notification with actions.

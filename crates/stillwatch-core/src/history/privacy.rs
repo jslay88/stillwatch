@@ -30,6 +30,8 @@ const ALLOWED: &[&str] = &[
     "snooze_seconds",
     "reblank_attempt",
     "answer",
+    "prompt_style",
+    "prompt_reason",
     "error_count",
     "from_version",
     "to_version",
@@ -100,6 +102,7 @@ fn full_entry(kind: HistoryKind) -> HistoryEntry {
     .with_snooze(Duration::from_mins(15))
     .with_reblank_attempt(2)
     .with_answer(PromptAnswer::Snooze)
+    .with_prompt(PromptMedium::Notification, PromptReason::Configured)
     .with_error_count(3)
     .with_versions(1, 2)
     .with_context(DecisionContext {
@@ -157,8 +160,10 @@ fn strings_are_only_names_and_timestamps() {
         [
             "2026-09-21T14:13:20Z",
             "HDMI-A-1",
+            "configured",
             "media",
             "monitoring",
+            "notification",
             "overlay",
             "prompting",
             "snooze",

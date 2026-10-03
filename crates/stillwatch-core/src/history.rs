@@ -41,6 +41,61 @@ pub enum HistoryKind {
     Migration,
 }
 
+/// Which prompt was actually shown, for [`HistoryKind::Prompt`] entries
+/// written when a prompter picks one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptMedium {
+    /// Desktop notification.
+    Notification,
+    /// Dialog (interim `kdialog`, or the GUI dialog later).
+    Dialog,
+}
+
+impl PromptMedium {
+    /// The wire name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Notification => "notification",
+            Self::Dialog => "dialog",
+        }
+    }
+}
+
+/// Why that prompt was shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptReason {
+    /// `prompt.style` named this medium.
+    Configured,
+    /// `prompt.style = "auto"`, and fullscreen is not a verified exception.
+    Auto,
+    /// `prompt.style = "auto"` and a fullscreen surface hides notifications.
+    Fullscreen,
+    /// No notification server, so the dialog took over.
+    FallbackUnavailable,
+    /// `Notify` failed, or the server can't show the prompt.
+    FallbackFailed,
+    /// The notification was closed without an action.
+    FallbackClosed,
+}
+
+impl PromptReason {
+    /// The wire name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Configured => "configured",
+            Self::Auto => "auto",
+            Self::Fullscreen => "fullscreen",
+            Self::FallbackUnavailable => "fallback_unavailable",
+            Self::FallbackFailed => "fallback_failed",
+            Self::FallbackClosed => "fallback_closed",
+        }
+    }
+}
+
 /// How a prompt ended, for [`HistoryKind::PromptAnswered`] entries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -111,6 +166,12 @@ pub struct HistoryEntry {
     /// How the prompt ended, for `PromptAnswered` entries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer: Option<PromptAnswer>,
+    /// Notification or dialog, for `Prompt` entries from the prompter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_style: Option<PromptMedium>,
+    /// Why that style was used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_reason: Option<PromptReason>,
     /// Number of problems found, for `ConfigReloadFailed` entries. The
     /// messages themselves are never recorded, since they can contain paths.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -140,6 +201,8 @@ impl HistoryEntry {
             snooze_seconds: None,
             reblank_attempt: None,
             answer: None,
+            prompt_style: None,
+            prompt_reason: None,
             error_count: None,
             from_version: None,
             to_version: None,
@@ -196,6 +259,14 @@ impl HistoryEntry {
     #[must_use]
     pub const fn with_answer(mut self, answer: PromptAnswer) -> Self {
         self.answer = Some(answer);
+        self
+    }
+
+    /// Attaches which prompt was shown and why.
+    #[must_use]
+    pub const fn with_prompt(mut self, style: PromptMedium, reason: PromptReason) -> Self {
+        self.prompt_style = Some(style);
+        self.prompt_reason = Some(reason);
         self
     }
 
@@ -267,6 +338,18 @@ mod tests {
         let entry: HistoryEntry =
             serde_json::from_str(r#"{"at":"2026-09-21T14:13:20Z","kind":"blank"}"#).unwrap();
         assert_eq!(entry, HistoryEntry::new(at(), HistoryKind::Blank));
+    }
+
+    #[test]
+    fn prompt_style_round_trips() {
+        let entry = HistoryEntry::new(at(), HistoryKind::Prompt)
+            .with_prompt(PromptMedium::Dialog, PromptReason::FallbackClosed);
+        assert_eq!(entry.prompt_style.unwrap().as_str(), "dialog");
+        assert_eq!(entry.prompt_reason.unwrap().as_str(), "fallback_closed");
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains(r#""prompt_style":"dialog""#));
+        assert!(json.contains(r#""prompt_reason":"fallback_closed""#));
+        assert_eq!(serde_json::from_str::<HistoryEntry>(&json).unwrap(), entry);
     }
 }
 

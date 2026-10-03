@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
-use stillwatch_core::history::DecisionContext;
+use stillwatch_core::history::{DecisionContext, PromptMedium, PromptReason};
 use stillwatch_core::state::State;
 use stillwatch_core::stats::{BlockCounts, OutputStats, Threshold, ThresholdReason};
 
@@ -117,6 +117,12 @@ fn details_cover_every_optional_field() {
     assert_eq!(details(&failed), ["3 problems"]);
     let migrated = HistoryEntry::new(at(0), HistoryKind::Migration).with_versions(1, 2);
     assert_eq!(details(&migrated), ["v1 -> v2"]);
+    let shown = HistoryEntry::new(at(0), HistoryKind::Prompt)
+        .with_prompt(PromptMedium::Dialog, PromptReason::FallbackClosed);
+    assert_eq!(details(&shown), ["dialog", "closed without an action"]);
+    let auto = HistoryEntry::new(at(0), HistoryKind::Prompt)
+        .with_prompt(PromptMedium::Notification, PromptReason::Auto);
+    assert_eq!(details(&auto), ["notification", "auto"]);
 }
 
 #[test]
