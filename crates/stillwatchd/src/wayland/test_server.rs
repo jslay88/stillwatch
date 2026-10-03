@@ -88,13 +88,14 @@ impl FakeCompositor {
     /// The compositor end and the client's socket.
     pub fn pair() -> (Self, UnixStream) {
         let (server, client) = UnixStream::pair().unwrap();
-        (
-            Self {
-                stream: server,
-                registry: 0,
-            },
-            client,
-        )
+        (Self::over(server), client)
+    }
+
+    const fn over(stream: UnixStream) -> Self {
+        Self {
+            stream,
+            registry: 0,
+        }
     }
 
     /// The client's `wl_registry` id, once [`advertise`](Self::advertise)
@@ -132,25 +133,7 @@ impl FakeCompositor {
 
     /// Sends an event.
     pub fn send(&mut self, object: u32, opcode: u16, args: &[Arg<'_>]) -> io::Result<()> {
-        let mut body = Vec::new();
-        for arg in args {
-            match arg {
-                Arg::Uint(value) => body.extend(value.to_ne_bytes()),
-                Arg::Str(text) => {
-                    let len = u32::try_from(text.len() + 1).unwrap();
-                    body.extend(len.to_ne_bytes());
-                    body.extend(text.as_bytes());
-                    body.push(0);
-                    body.resize(body.len().next_multiple_of(4), 0);
-                }
-            }
-        }
-        let size = u32::try_from(body.len() + 8).unwrap();
-        let mut message = Vec::with_capacity(body.len() + 8);
-        message.extend(object.to_ne_bytes());
-        message.extend(((size << 16) | u32::from(opcode)).to_ne_bytes());
-        message.extend(body);
-        self.stream.write_all(&message)
+        self.stream.write_all(&encode(object, opcode, args))
     }
 
     /// Answers the client's registry request and sync with `globals`
@@ -169,12 +152,17 @@ impl FakeCompositor {
         self.registry = self.expect(DISPLAY, DISPLAY_GET_REGISTRY)?.uint();
         let callback = self.expect(DISPLAY, DISPLAY_SYNC)?.uint();
         for &(name, interface, version) in globals {
-            self.global(name, interface, version)?;
+            if client_left(self.global(name, interface, version))? {
+                return Ok(());
+            }
         }
         for &name in removed {
-            self.remove_global(name)?;
+            if client_left(self.remove_global(name))? {
+                return Ok(());
+            }
         }
-        self.done(callback)
+        client_left(self.done(callback))?;
+        Ok(())
     }
 
     /// Announces a global on the client's registry.
@@ -193,8 +181,11 @@ impl FakeCompositor {
 
     /// Answers a `wl_display.sync` whose callback is `callback`.
     pub fn done(&mut self, callback: u32) -> io::Result<()> {
-        self.send(callback, CALLBACK_DONE, &[Arg::Uint(0)])?;
-        self.send(DISPLAY, DISPLAY_DELETE_ID, &[Arg::Uint(callback)])
+        // A client may hang up as soon as it reads `done`, so `delete_id` has
+        // to be in the same write or it can hit a closed socket.
+        let mut reply = encode(callback, CALLBACK_DONE, &[Arg::Uint(0)]);
+        reply.extend(encode(DISPLAY, DISPLAY_DELETE_ID, &[Arg::Uint(callback)]));
+        self.stream.write_all(&reply)
     }
 
     /// Sends a fatal `wl_display.error` about `object`.
@@ -209,5 +200,93 @@ impl FakeCompositor {
     /// Blocks until the client closes its end.
     pub fn wait_for_close(&mut self) {
         while self.read().is_ok() {}
+    }
+}
+
+/// `true` when the client already hung up. A roundtrip that finds nothing to
+/// bind (no idle notifier) closes the socket as soon as it has read `done`,
+/// which races the rest of the reply. That is the client finishing, not a
+/// compositor failure.
+fn client_left(result: io::Result<()>) -> io::Result<bool> {
+    match result {
+        Ok(()) => Ok(false),
+        Err(err)
+            if matches!(
+                err.kind(),
+                io::ErrorKind::BrokenPipe
+                    | io::ErrorKind::ConnectionReset
+                    | io::ErrorKind::ConnectionAborted
+            ) =>
+        {
+            Ok(true)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// One event on the wire.
+fn encode(object: u32, opcode: u16, args: &[Arg<'_>]) -> Vec<u8> {
+    let mut body = Vec::new();
+    for arg in args {
+        match arg {
+            Arg::Uint(value) => body.extend(value.to_ne_bytes()),
+            Arg::Str(text) => {
+                let len = u32::try_from(text.len() + 1).unwrap();
+                body.extend(len.to_ne_bytes());
+                body.extend(text.as_bytes());
+                body.push(0);
+                body.resize(body.len().next_multiple_of(4), 0);
+            }
+        }
+    }
+    let size = u32::try_from(body.len() + 8).unwrap();
+    let mut message = Vec::with_capacity(body.len() + 8);
+    message.extend(object.to_ne_bytes());
+    message.extend(((size << 16) | u32::from(opcode)).to_ne_bytes());
+    message.extend(body);
+    message
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+    use std::os::fd::OwnedFd;
+    use std::os::unix::net::UnixDatagram;
+
+    use super::*;
+
+    #[test]
+    fn a_sync_is_answered_in_one_write() {
+        // Datagrams keep write boundaries, so one recv gets exactly one write.
+        let (server, client) = UnixDatagram::pair().unwrap();
+        let mut compositor = FakeCompositor::over(UnixStream::from(OwnedFd::from(server)));
+        compositor.done(7).unwrap();
+
+        let mut reply = [0; 64];
+        assert_eq!(client.recv(&mut reply).unwrap(), 24);
+        let object = |at: usize| u32::from_ne_bytes(reply[at..at + 4].try_into().unwrap());
+        assert_eq!((object(0), object(12)), (7, DISPLAY));
+    }
+
+    #[test]
+    fn a_client_that_leaves_during_the_reply_is_not_an_error() {
+        let (mut server, mut client) = FakeCompositor::pair();
+        client
+            .write_all(&request(DISPLAY, DISPLAY_GET_REGISTRY, 2))
+            .unwrap();
+        client
+            .write_all(&request(DISPLAY, DISPLAY_SYNC, 3))
+            .unwrap();
+        drop(client);
+
+        server.advertise(&[(11, "wl_seat", 10)]).unwrap();
+    }
+
+    fn request(object: u32, opcode: u16, new_id: u32) -> [u8; 12] {
+        let mut message = [0; 12];
+        message[..4].copy_from_slice(&object.to_ne_bytes());
+        message[4..8].copy_from_slice(&((12u32 << 16) | u32::from(opcode)).to_ne_bytes());
+        message[8..].copy_from_slice(&new_id.to_ne_bytes());
+        message
     }
 }
