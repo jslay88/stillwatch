@@ -3,9 +3,10 @@
 //! The window is an iced daemon: it stays up with no window until the tray
 //! or a second invocation asks for one, and it keeps running after the last
 //! window closes. The settings page is generated from the schema. Calibration
-//! is the heatmap. History and Service are still placeholders. `prompt` is a
-//! short-lived dialog that answers over D-Bus. The tray speaks D-Bus to
-//! `stillwatchd` and does not need the daemon in order to open.
+//! is the heatmap. History lists past decisions. Service manages the user unit
+//! and tray autostart. `prompt` is a short-lived dialog that answers over
+//! D-Bus. The tray speaks D-Bus to `stillwatchd` and does not need the daemon
+//! in order to open.
 
 mod app;
 mod args;
@@ -15,6 +16,7 @@ mod calibration;
 mod daemon;
 mod edit_msg;
 mod error;
+mod history;
 mod icons;
 mod instance;
 mod launch;
@@ -22,6 +24,7 @@ mod model;
 mod page;
 mod presets;
 mod prompt;
+mod service;
 mod session;
 mod settings;
 mod shell;
@@ -34,11 +37,18 @@ pub use args::Cli;
 pub use calibration::{CalMsg, Calibration, OutputHeat, ProbePace, ProbeView};
 pub use daemon::{dispatch, watch};
 pub use edit_msg::{FieldChange, PresetKind, RegionPart, RestoreScope, SettingsMsg};
+pub use history::{
+    HistMsg, HistoryLoad, HistoryPage, HistoryRow, HistorySource, KindFilter, TimeRange,
+};
 pub use instance::{Claim, GUI_BUS_NAME, claim};
 pub use launch::LaunchMode;
 pub use model::update;
 pub use page::Page;
 pub use prompt::{Dialog, Input, Note, Step, answer_prompt, update as update_prompt};
+pub use service::{
+    RunState, ServicePage, SvcMsg, UNIT_NAME, UnitOp, UnitQuery, UnitView, disable_unit,
+    enable_unit, query_unit, restart_unit, start_unit, stop_unit,
+};
 pub use settings::{
     Catalog, GamepadSeen, KeyChange, PickerRow, activity_lit, gamepad_rows, output_rows,
     player_rows, player_value,

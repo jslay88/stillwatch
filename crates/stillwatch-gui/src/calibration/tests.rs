@@ -264,7 +264,9 @@ fn the_probe_starts_and_stops_with_the_page() {
     assert!(shell.calibration.view.is_none());
     assert_eq!(
         update(&mut shell, Message::Navigate(Page::History)),
-        Vec::new()
+        vec![DaemonCall::LoadHistory {
+            since_seconds: crate::history::TimeRange::Day.since_seconds(),
+        }]
     );
 }
 
