@@ -38,7 +38,6 @@ fn can_open(node: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::os::unix::fs::OpenOptionsExt as _;
 
     use super::*;
 
@@ -62,13 +61,8 @@ mod tests {
     fn an_unopenable_node_is_not_access() {
         let dir = tempfile::tempdir().unwrap();
         let node = dir.path().join("i2c-3");
-        OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o000)
-            .open(&node)
-            .unwrap();
+        // A directory fails read+write open for every uid, including root in CI.
+        fs::create_dir(&node).unwrap();
         assert!(!can_open(&node));
     }
 }
