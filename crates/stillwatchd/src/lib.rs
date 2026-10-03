@@ -1,7 +1,7 @@
 //! The Stillwatch daemon.
 //!
-//! For now it sets up logging, reports where its config lives, and runs until
-//! SIGTERM or SIGINT. The idle, capture, and action loop plugs in here later.
+//! `main` parses arguments. [`daemon`] owns the event loop that connects the
+//! backends to the state machine.
 
 pub mod action;
 pub mod activity;
@@ -9,6 +9,7 @@ pub mod args;
 pub mod capture;
 pub mod clock;
 pub mod config_watch;
+mod daemon;
 mod dbus;
 pub mod gamepad;
 pub mod history;
@@ -63,24 +64,5 @@ pub async fn run(args: Args) -> anyhow::Result<()> {
         ?sink,
         "stillwatchd started"
     );
-    tokio::spawn(check_kwin_capture());
-    let signal = signals::wait_for_shutdown(&mut signals).await;
-    tracing::info!(?signal, "stillwatchd stopping");
-    Ok(())
-}
-
-/// Logs whether `KWin` `ScreenShot2` capture works, with remediation when it
-/// isn't authorized. Without it Stillwatch runs on input idle alone.
-async fn check_kwin_capture() {
-    let result = match capture::kwin::KwinCapture::connect().await {
-        Ok(kwin) => capture::kwin::startup_check(&kwin).await,
-        Err(error) => Err(error),
-    };
-    match result {
-        Ok(report) => tracing::info!(%report, "KWin ScreenShot2 capture works"),
-        Err(error @ stillwatch_core::backend::BackendError::PermissionDenied(_)) => {
-            tracing::warn!(%error, "KWin ScreenShot2 capture isn't authorized");
-        }
-        Err(error) => tracing::info!(%error, "KWin ScreenShot2 capture is unavailable"),
-    }
+    daemon::run(config, &mut signals).await
 }
