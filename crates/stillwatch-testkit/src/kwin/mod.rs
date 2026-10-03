@@ -141,8 +141,15 @@ impl Kwin {
             bus,
             sandbox,
         };
-        kwin.wait_ready(Instant::now() + options.ready_timeout)
-            .await?;
+        let started = Instant::now();
+        kwin.wait_ready(started + options.ready_timeout).await?;
+        eprintln!(
+            "{program} ready in {:?}: {} output(s) at {}x{}",
+            started.elapsed(),
+            options.outputs,
+            options.width,
+            options.height
+        );
         Ok(Some(kwin))
     }
 

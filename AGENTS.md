@@ -55,6 +55,8 @@ Backend integration tests live in each crate's `tests/` and use the dev-only `cr
 - Never point a test at the desktop session: don't read `WAYLAND_DISPLAY` or the session bus, always go through the testkit.
 - When `dbus-daemon` or `kwin_wayland` isn't installed, `start` returns `Ok(None)` and the test returns early with a "skipping" message. `STILLWATCH_REQUIRE_DBUS=1` and `STILLWATCH_REQUIRE_KWIN=1` turn that into a failure. CI sets both, so a skip there is a red build.
 - Run just these with `cargo nextest run -p stillwatch-testkit -p stillwatchd`, or one file with `--test wayland_idle`. Locally `cargo xtask ci` uses your installed KWin; it never touches the running session.
+- New test binaries that start KWin go in the filter in `.config/nextest.toml`, so their output (the "kwin_wayland ready" line) shows in CI logs even when they pass.
+- CI runs on GitHub's runners with no render node, so KWin composites with QPainter there. ScreenShot2 authorizes callers but answers "Screenshot got cancelled" without OpenGL; locally (with a GPU) it returns frames.
 
 ## Linear workflow
 
