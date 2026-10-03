@@ -3,6 +3,7 @@
 
 use stillwatch_core::state::State;
 
+use crate::settings;
 use crate::shell::{
     DaemonCall, DaemonEvent, Link, Message, Shell, Snapshot, TrayAction, Visibility, snooze_seconds,
 };
@@ -21,6 +22,7 @@ pub fn update(shell: &mut Shell, message: Message) -> Vec<DaemonCall> {
         Message::OpenPrompt => shell.prompt = shell.prompt.reveal(),
         Message::ClosePrompt => shell.prompt = Visibility::Closed,
         Message::Quit => shell.quit = true,
+        Message::Settings(message) => return settings_msg(shell, message),
         Message::Tray(action) => return tray(shell, action),
         Message::BecamePrimary { first, mode } => shell.apply_launch(mode, first),
         Message::Daemon(event) => apply_daemon(shell, event),
@@ -55,6 +57,8 @@ fn apply_daemon(shell: &mut Shell, event: DaemonEvent) {
             shell.notice = None;
         }
         DaemonEvent::Snapshot(snapshot) => {
+            shell.config_ok = Some(snapshot.config_errors.is_empty());
+            shell.config_errors.clone_from(&snapshot.config_errors);
             shell.link = Link::Up(snapshot);
             shell.notice = None;
         }
@@ -62,20 +66,46 @@ fn apply_daemon(shell: &mut Shell, event: DaemonEvent) {
         DaemonEvent::Config { ok, errors } => {
             shell.config_ok = Some(ok);
             shell.config_errors = errors;
+            if let Some(path) = shell.config_path.clone() {
+                let dirty = shell.editor.is_dirty();
+                shell.editor.on_disk_changed(&path);
+                if !dirty && let Some(presets) = shell.editor.presets() {
+                    shell.presets_minutes = presets;
+                }
+            }
         }
         DaemonEvent::Presets(presets) => shell.presets_minutes = presets,
         DaemonEvent::CallFailed(message) => shell.notice = Some(message),
     }
 }
 
+fn settings_msg(shell: &mut Shell, message: crate::edit_msg::SettingsMsg) -> Vec<DaemonCall> {
+    let outcome: settings::Outcome =
+        settings::handle(&mut shell.editor, shell.config_path.as_deref(), message);
+    if let Some(presets) = outcome.presets {
+        shell.presets_minutes = presets;
+    }
+    if outcome.reload && matches!(shell.link, Link::Up(_)) {
+        vec![DaemonCall::Reload]
+    } else {
+        Vec::new()
+    }
+}
+
 fn apply_state(shell: &mut Shell, state: State) {
-    let remaining = match &shell.link {
-        Link::Up(snapshot) if state == State::Snoozed => snapshot.snooze_remaining_seconds,
-        _ => None,
+    let previous = match &shell.link {
+        Link::Up(snapshot) => Some(snapshot.clone()),
+        Link::Down => None,
     };
+    let remaining = previous
+        .as_ref()
+        .filter(|_| state == State::Snoozed)
+        .and_then(|snapshot| snapshot.snooze_remaining_seconds);
+    let config_errors = previous.map_or_else(Vec::new, |snapshot| snapshot.config_errors);
     shell.link = Link::Up(Snapshot {
         state,
         snooze_remaining_seconds: remaining,
+        config_errors,
     });
 }
 

@@ -61,6 +61,9 @@ async fn tray_model_snooze_and_pause_reach_the_daemon() {
             ControlCommand::CancelSnooze,
         ]
     );
+    assert_eq!(fake.state().reloads, 0);
+    dispatch(&proxy, DaemonCall::Reload).await.unwrap();
+    assert_eq!(fake.state().reloads, 1);
 }
 
 #[tokio::test]

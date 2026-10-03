@@ -3,7 +3,7 @@
 /// A page of the settings window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Page {
-    /// Schema-driven settings (later).
+    /// Schema-driven settings.
     #[default]
     Settings,
     /// Calibration heatmap (later).

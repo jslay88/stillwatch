@@ -5,23 +5,28 @@ use iced::widget::{button, column, container, row, text};
 use iced::{Element, Fill};
 
 use crate::page::Page;
+use crate::settings;
 use crate::shell::{Message, Shell};
 use crate::tray::status_text;
 
-/// The settings window: navigation plus the current page's placeholder.
+/// The settings window: navigation plus the current page.
 #[must_use]
 pub fn shell(shell: &Shell) -> Element<'_, Message> {
-    let mut content = column![
-        text(status_text(&shell.link)),
-        nav(shell.page),
-        text(shell.page.label()).size(24),
-        text(shell.page.placeholder()),
-    ]
-    .spacing(12);
+    let mut content = column![text(status_text(&shell.link)), nav(shell.page),]
+        .spacing(12)
+        .height(Fill);
+    content = match shell.page {
+        Page::Settings => {
+            content.push(settings::page(&shell.editor, &shell.config_errors).map(Message::Settings))
+        }
+        page => content
+            .push(text(page.label()).size(24))
+            .push(text(page.placeholder())),
+    };
     if let Some(notice) = &shell.notice {
         content = content.push(text(notice));
     }
-    if shell.config_ok == Some(false) {
+    if shell.page != Page::Settings && shell.config_ok == Some(false) {
         content = content.push(text(config_line(&shell.config_errors)));
     }
     content = content.push(button("Quit").on_press(Message::Quit));

@@ -83,7 +83,7 @@ fn boot(presets: Vec<u32>, mode: LaunchMode, address: Option<String>) -> (App, T
     let (tray_tx, tray_rx) = mpsc::channel(16);
     let (activations_tx, activations_rx) = mpsc::channel(8);
     let app = App {
-        shell: Shell::new(presets),
+        shell: crate::boot::shell(presets),
         mode,
         address,
         slots: Slots::default(),

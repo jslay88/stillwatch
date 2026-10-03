@@ -34,6 +34,7 @@ pub async fn dispatch(proxy: &StillwatchProxy<'_>, call: DaemonCall) -> Result<(
         DaemonCall::CancelSnooze => proxy.cancel_snooze().await,
         DaemonCall::Pause => proxy.pause().await,
         DaemonCall::Resume => proxy.resume().await,
+        DaemonCall::Reload => proxy.reload().await.map(|_| ()),
     };
     result.map_err(Error::from)
 }

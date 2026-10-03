@@ -102,6 +102,7 @@ fn daemon_up_down_and_snooze_time() {
         Message::Daemon(DaemonEvent::Snapshot(Snapshot {
             state: State::Monitoring,
             snooze_remaining_seconds: None,
+            config_errors: Vec::new(),
         })),
     );
     assert_eq!(
@@ -109,6 +110,7 @@ fn daemon_up_down_and_snooze_time() {
         Link::Up(Snapshot {
             state: State::Monitoring,
             snooze_remaining_seconds: None,
+            config_errors: Vec::new(),
         })
     );
 
@@ -117,6 +119,7 @@ fn daemon_up_down_and_snooze_time() {
         Message::Daemon(DaemonEvent::Snapshot(Snapshot {
             state: State::Snoozed,
             snooze_remaining_seconds: Some(90),
+            config_errors: Vec::new(),
         })),
     );
     let _ = update(
@@ -128,6 +131,7 @@ fn daemon_up_down_and_snooze_time() {
         Link::Up(Snapshot {
             state: State::Snoozed,
             snooze_remaining_seconds: Some(90),
+            config_errors: Vec::new(),
         })
     );
     let _ = update(
@@ -139,6 +143,7 @@ fn daemon_up_down_and_snooze_time() {
         Link::Up(Snapshot {
             state: State::Active,
             snooze_remaining_seconds: None,
+            config_errors: Vec::new(),
         })
     );
 
@@ -178,6 +183,7 @@ fn config_reload_keeps_or_replaces_presets() {
 fn status_payload_maps_onto_the_snapshot() {
     let status = StatusPayload {
         snooze_remaining_seconds: Some(12),
+        config_errors: vec!["stale.stale_percent: must be between 1 and 100, got 0".into()],
         ..StatusPayload::new(State::Blanked)
     };
     assert_eq!(
@@ -185,6 +191,7 @@ fn status_payload_maps_onto_the_snapshot() {
         Snapshot {
             state: State::Blanked,
             snooze_remaining_seconds: Some(12),
+            config_errors: vec!["stale.stale_percent: must be between 1 and 100, got 0".into()],
         }
     );
 }
